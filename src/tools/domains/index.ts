@@ -9,6 +9,7 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { DOCS_ACTIONS, docs } from './docs.js'
 import type { DomainRunInput } from './factory.js'
+import { TIME_ACTIONS, time } from './time.js'
 
 export interface DomainDef {
   name: string // tool name, e.g. 'docs'
@@ -52,5 +53,13 @@ export const DOMAINS: DomainDef[] = [
       }
     },
     run: docs
+  },
+  {
+    name: 'time',
+    description:
+      'Local date/time/timezone helpers (no Google account needed).\n\nActions:\n- getCurrentDate\n- getCurrentTime\n- getTimeZone',
+    actions: TIME_ACTIONS,
+    inputProps: {},
+    run: time
   }
 ]
