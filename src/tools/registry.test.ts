@@ -33,9 +33,11 @@ import { config } from './config.js'
 import { docs } from './domains/docs.js'
 import { WorkspaceMCPError } from './helpers/errors.js'
 import { registerTools } from './registry.js'
+import { DOMAINS } from './domains/index.js'
 
-const EXPECTED_TOOL_NAMES = ['docs', 'config', 'help']
-const EXPECTED_RESOURCE_URIS = ['workspace://docs/docs', 'workspace://docs/config', 'workspace://docs/overview']
+// Derived from the single DOMAINS source of truth: registry builds TOOLS as
+// [...DOMAINS, config, help], so adding a domain needs no test edit here.
+const EXPECTED_TOOL_NAMES = [...DOMAINS.map((d) => d.name), 'config', 'help']
 
 function createServer() {
   return new Server({ name: 'test-server', version: '0.0.0' }, { capabilities: { tools: {}, resources: {} } })
@@ -62,7 +64,7 @@ describe('registerTools', () => {
   })
 
   describe('ListTools handler', () => {
-    it('returns exactly the docs, config, help tools', async () => {
+    it('returns exactly the DOMAINS-derived domain tools + config + help', async () => {
       const handler = getHandler(server, 'tools/list')
       const result = await handler({ method: 'tools/list' })
 
@@ -73,12 +75,13 @@ describe('registerTools', () => {
       const handler = getHandler(server, 'tools/list')
       const result = await handler({ method: 'tools/list' })
 
-      const requiredByName: Record<string, string> = { docs: 'action', config: 'action', help: 'topic' }
       for (const tool of result.tools) {
         expect(typeof tool.name).toBe('string')
         expect(typeof tool.description).toBe('string')
         expect(tool.inputSchema.type).toBe('object')
-        expect(tool.inputSchema.required).toContain(requiredByName[tool.name])
+        // domain tools + config require 'action'; help requires 'topic'
+        const req = tool.name === 'help' ? 'topic' : 'action'
+        expect(tool.inputSchema.required).toContain(req)
       }
     })
 
@@ -99,11 +102,12 @@ describe('registerTools', () => {
   })
 
   describe('ListResources / ReadResource handlers', () => {
-    it('lists the 3 markdown docs as resources', async () => {
+    it('lists a markdown doc resource for every domain', async () => {
       const handler = getHandler(server, 'resources/list')
       const result = await handler({ method: 'resources/list' })
 
-      expect(result.resources.map((r: any) => r.uri)).toEqual(EXPECTED_RESOURCE_URIS)
+      const uris = result.resources.map((r: any) => r.uri)
+      for (const d of DOMAINS) expect(uris).toContain(`workspace://docs/${d.name}`)
       for (const resource of result.resources) {
         expect(resource.mimeType).toBe('text/markdown')
       }
