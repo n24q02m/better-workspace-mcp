@@ -1,6 +1,8 @@
 /**
  * Tool Registry -- N+2 tool surface: 1 mega-tool per domain (docs; Task 7
- * appends 9 more) + 2 infra tools (config, help).
+ * appends 9 more) + 2 infra tools (config, help). TOOLS, RESOURCES, the help
+ * topic allowlist, and the CallTool dispatch map are all derived from the
+ * single DOMAINS list in ./domains/index.js -- see that file to add a domain.
  */
 
 import { readFile } from 'node:fs/promises'
@@ -15,7 +17,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js'
 import { getState } from '../auth/credential-state.js'
 import { config } from './config.js'
-import { DOCS_ACTIONS, type DocsResult, docs } from './domains/docs.js'
+import { DOMAINS, type DomainDef } from './domains/index.js'
 import { aiReadableMessage, findClosestMatch, WorkspaceMCPError } from './helpers/errors.js'
 
 // Tools that work without a configured Google account
@@ -30,11 +32,18 @@ const DOCS_DIR = __dirname.endsWith('bin')
   ? join(__dirname, '..', 'build', 'src', 'docs')
   : join(__dirname, '..', 'docs')
 
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
 /**
- * Documentation resources for full tool details
+ * Documentation resources for full tool details. One per domain, plus the
+ * config and help infra tools' own docs (not domains themselves).
  */
 const RESOURCES = [
-  { uri: 'workspace://docs/docs', name: 'Docs Tool Docs', file: 'docs.md' },
+  ...DOMAINS.map((d) => ({
+    uri: `workspace://docs/${d.name}`,
+    name: `${capitalize(d.name)} Tool Docs`,
+    file: `${d.name}.md`
+  })),
   { uri: 'workspace://docs/config', name: 'Config Tool Docs', file: 'config.md' },
   { uri: 'workspace://docs/overview', name: 'Overview Docs', file: 'overview.md' }
 ]
@@ -43,20 +52,21 @@ const PRECOMPUTED_RESOURCES = RESOURCES.map((r) => ({ uri: r.uri, name: r.name, 
 const RESOURCE_MAP = new Map(RESOURCES.map((r) => [r.uri, r]))
 const AVAILABLE_RESOURCE_URIS = RESOURCES.map((r) => r.uri).join(', ')
 
-const HELP_TOPICS = ['docs', 'config', 'overview'] as const
+const HELP_TOPICS = [...DOMAINS.map((d) => d.name), 'config', 'overview']
 const VALID_HELP_TOPICS = new Set<string>(HELP_TOPICS)
 const VALID_HELP_TOPICS_STRING = HELP_TOPICS.join(', ')
 
 /**
- * N=1 domain now (docs). Task 7 appends 9 more domain tool definitions here.
+ * A domain's mega-tool definition, derived from its DomainDef -- action enum
+ * comes from `actions`, extra params from `inputProps`, and `account` is
+ * appended for every domain (accepted, ignored in M1 single-account mode).
  */
-const TOOLS = [
-  {
-    name: 'docs',
-    description:
-      'Google Docs operations.\n\nActions (required params -> optional):\n- getText (documentId -> tabId)\n- create (title -> content)\n- writeText (documentId, text -> position, tabId)\n- getSuggestions (documentId)\n- replaceText (documentId, findText, replaceText -> tabId)\n- formatText (documentId, formats -> tabId)\n\naccount is accepted but IGNORED in M1 (single-account; M2 wires per-account auth).',
+function domainToolDef(domain: DomainDef) {
+  return {
+    name: domain.name,
+    description: domain.description,
     annotations: {
-      title: 'Docs',
+      title: capitalize(domain.name),
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: false,
@@ -65,37 +75,20 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        action: { type: 'string', enum: [...DOCS_ACTIONS], description: 'Action to perform' },
+        action: { type: 'string', enum: [...domain.actions], description: 'Action to perform' },
         account: { type: 'string', description: 'Account identifier (accepted, ignored in M1 single-account mode)' },
-        documentId: { type: 'string', description: 'Google Doc ID or URL' },
-        title: { type: 'string', description: 'Document title (for create)' },
-        content: { type: 'string', description: 'Initial document content (for create)' },
-        text: { type: 'string', description: 'Text to insert (for writeText)' },
-        position: {
-          type: 'string',
-          description: 'Insert position for writeText: "beginning", "end" (default), or a positive integer index'
-        },
-        tabId: { type: 'string', description: 'Tab ID to target (optional, for multi-tab documents)' },
-        findText: { type: 'string', description: 'Text to find (for replaceText)' },
-        replaceText: { type: 'string', description: 'Replacement text (for replaceText)' },
-        formats: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              startIndex: { type: 'number' },
-              endIndex: { type: 'number' },
-              style: { type: 'string' },
-              url: { type: 'string' }
-            },
-            required: ['startIndex', 'endIndex', 'style']
-          },
-          description: 'Formatting operations to apply (for formatText)'
-        }
+        ...domain.inputProps
       },
       required: ['action']
     }
-  },
+  }
+}
+
+/**
+ * N=1 domain now (docs). Task 7 appends 9 more entries to DOMAINS, not here.
+ */
+const TOOLS = [
+  ...DOMAINS.map(domainToolDef),
   {
     name: 'config',
     description:
@@ -145,12 +138,11 @@ const ALL_TOOL_NAMES = TOOLS.map((t) => t.name)
 const ALL_TOOL_NAMES_STRING = ALL_TOOL_NAMES.join(', ')
 
 /**
- * Dispatch map for domain mega-tools. Each entry returns the MCP CallTool
- * result shape directly (no re-wrapping). Task 7 appends 9 more entries here.
+ * Dispatch map for domain mega-tools, keyed by domain name. Each entry
+ * returns the MCP CallTool result shape directly (no re-wrapping). Task 7
+ * appends 9 more entries to DOMAINS, not here.
  */
-const DOMAIN_HANDLERS: Record<string, (args: any) => Promise<DocsResult>> = {
-  docs
-}
+const DOMAIN_MAP = new Map(DOMAINS.map((d) => [d.name, d.run]))
 
 /**
  * Register all tools with the MCP server. Single-account M1 -- no client factory.
@@ -223,9 +215,9 @@ export function registerTools(server: Server) {
     }
 
     try {
-      const domainHandler = DOMAIN_HANDLERS[name]
-      if (domainHandler) {
-        return await domainHandler(args)
+      const domainRun = DOMAIN_MAP.get(name)
+      if (domainRun) {
+        return await domainRun(args as any)
       }
 
       switch (name) {
