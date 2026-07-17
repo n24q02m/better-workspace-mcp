@@ -43,6 +43,9 @@ export class WorkspaceAuth {
       token_type: raw.token_type
     })
     // Persist auto-refreshed tokens so a fresh access_token survives restarts.
+    // Merge order matters: {...raw, ...t} keeps the stored refresh_token because
+    // google-auth-library's 'tokens' event omits refresh_token on a refresh grant
+    // (it's re-attached by the library AFTER this emit). Never flip to {...t, ...raw}.
     client.on('tokens', (t) => {
       void this.saveTokens({ ...raw, ...t } as GoogleTokens)
     })
