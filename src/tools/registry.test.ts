@@ -31,9 +31,9 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { getState } from '../auth/credential-state.js'
 import { config } from './config.js'
 import { docs } from './domains/docs.js'
+import { DOMAINS } from './domains/index.js'
 import { WorkspaceMCPError } from './helpers/errors.js'
 import { registerTools } from './registry.js'
-import { DOMAINS } from './domains/index.js'
 
 // Derived from the single DOMAINS source of truth: registry builds TOOLS as
 // [...DOMAINS, config, help], so adding a domain needs no test edit here.
