@@ -1,32 +1,19 @@
-/**
- * @license
- * Copyright 2025 Google LLC
- * SPDX-License-Identifier: Apache-2.0
- */
+// Shim (ours) for upstream utils/paths — decoupled from gemini-cli.
+// Upstream walked the FS for a `gemini-extension.json` marker (thrown if
+// missing) and defined its OWN encrypted-token paths; we authenticate via
+// mcp-core PerPluginStore, so those are unused and dropped here (YAGNI).
+// PROJECT_ROOT is only a base for the optional debug log file (see logger.ts).
+import path from 'node:path'
+import fs from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
-import path from 'node:path';
-import * as fs from 'node:fs';
-
-function findProjectRoot(): string {
-  let dir = __dirname;
+function findPackageRoot(): string {
+  let dir = path.dirname(fileURLToPath(import.meta.url))
   while (dir !== path.dirname(dir)) {
-    if (fs.existsSync(path.join(dir, 'gemini-extension.json'))) {
-      return dir;
-    }
-    dir = path.dirname(dir);
+    if (fs.existsSync(path.join(dir, 'package.json'))) return dir
+    dir = path.dirname(dir)
   }
-  throw new Error(
-    `Could not find project root containing gemini-extension.json. Traversed up from ${__dirname}.`,
-  );
+  return process.cwd() // fallback; never throws
 }
 
-// Construct an absolute path to the project root.
-export const PROJECT_ROOT = findProjectRoot();
-export const ENCRYPTED_TOKEN_PATH = path.join(
-  PROJECT_ROOT,
-  'gemini-cli-workspace-token.json',
-);
-export const ENCRYPTION_MASTER_KEY_PATH = path.join(
-  PROJECT_ROOT,
-  '.gemini-cli-workspace-master-key',
-);
+export const PROJECT_ROOT = findPackageRoot()
