@@ -72,6 +72,13 @@ describe('enhanceError', () => {
       expect(result.code).toBe('NOT_FOUND')
       expect(result.message).toBe('missing')
     })
+
+    it('should fall back to a default message when a coded error has none', () => {
+      const result = enhanceError({ code: 'weird' })
+
+      expect(result.code).toBe('WEIRD')
+      expect(result.message).toBe('Unknown error occurred')
+    })
   })
 
   describe('generic errors', () => {
@@ -125,6 +132,30 @@ describe('enhanceError', () => {
       expect(JSON.stringify(enhanced.details)).not.toContain('secret-token')
       expect(enhanced.details.config).toBeUndefined()
       expect(enhanced.details.request).toBeUndefined()
+    })
+
+    it('should only redact the sensitive keys in a headers object, leaving others intact', () => {
+      // stripSensitiveFields mutates the error object in place before
+      // sanitizeErrorDetails's whitelist strips non-whitelisted fields like
+      // `config` out of the final `details` -- assert on the mutated input
+      // directly to see redactHeaderMap's per-key behavior.
+      const errorWithMixedHeaders = {
+        message: 'boom',
+        config: { headers: { Authorization: 'Bearer secret-token', 'Content-Type': 'application/json' } }
+      }
+
+      enhanceError(errorWithMixedHeaders)
+
+      expect(errorWithMixedHeaders.config.headers).not.toHaveProperty('Authorization')
+      expect(errorWithMixedHeaders.config.headers['Content-Type']).toBe('application/json')
+    })
+
+    it('should not infinite-loop on a circular error object', () => {
+      const circular: Record<string, unknown> = { message: 'boom', code: 'CIRC' }
+      circular.self = circular
+
+      expect(() => enhanceError(circular)).not.toThrow()
+      expect(enhanceError(circular).code).toBe('CIRC')
     })
   })
 })

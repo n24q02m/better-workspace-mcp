@@ -42,6 +42,11 @@ jobs:
 
       - run: bun install --frozen-lockfile
       - run: bun run check
+      # Build BEFORE test: tests/protocol/m1-stdio.test.ts spawns the built
+      # bin/cli.mjs over the real MCP stdio transport, so it must exist
+      # before `bun run test` runs (a fresh CI checkout has no bin/ -- it's
+      # gitignored, produced only by this build step).
+      - run: bun run build
       - name: Run tests with coverage
         run: bun run test -- --coverage
       - name: Upload coverage to Codecov
@@ -51,7 +56,6 @@ jobs:
           # CUSTOMIZE: Coverage file path
           files: coverage/lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
-      - run: bun run build
 
   # ============================================================================
   # Dependency Review

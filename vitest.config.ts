@@ -6,7 +6,9 @@ export default defineConfig({
     coverage: {
       reporter: ['text', 'lcov'],
       reportsDirectory: './coverage',
-      exclude: ['node_modules/', 'build/', 'bin/']
+      // src/vendored/** is byte-identical upstream code (see NOTICE), not our
+      // coverage target -- our code is src/tools/** and src/auth/**.
+      exclude: ['node_modules/', 'build/', 'bin/', 'src/vendored/**']
     }
   }
 })

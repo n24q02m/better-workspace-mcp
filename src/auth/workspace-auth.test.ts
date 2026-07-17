@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setHomeDirForTesting } from '@n24q02m/mcp-core/storage'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { STORE_PLUGIN } from '../constants.js'
 import { WorkspaceAuth } from './workspace-auth.js'
 
@@ -53,5 +53,27 @@ describe('WorkspaceAuth', () => {
   it('uses a store plugin name without the -mcp suffix (avoids double -mcp on disk)', () => {
     expect(STORE_PLUGIN).toBe('better-workspace')
     expect(STORE_PLUGIN.endsWith('-mcp')).toBe(false)
+  })
+
+  it('persists an auto-refreshed access_token on the client "tokens" event, keeping the stored refresh_token', async () => {
+    const auth = new WorkspaceAuth(['openid'])
+    await auth.saveTokens({ access_token: 'at', refresh_token: 'rt', expiry_date: Date.now() + 3600_000 })
+    const client = await auth.getAuthenticatedClient()
+    const saveTokensSpy = vi.spyOn(auth, 'saveTokens')
+
+    // google-auth-library emits 'tokens' with a fresh access_token but no
+    // refresh_token on a refresh grant -- simulate that here. EventEmitter
+    // invokes the listener (and thus the `void this.saveTokens(...)` call)
+    // synchronously, so the spy is already populated once emit() returns;
+    // await its captured promise instead of guessing a delay (the listener
+    // itself is deliberately fire-and-forget in production code).
+    client.emit('tokens', { access_token: 'new-at', expiry_date: Date.now() + 7200_000 })
+    expect(saveTokensSpy).toHaveBeenCalledTimes(1)
+    await saveTokensSpy.mock.results[0]?.value
+
+    const refreshed = await auth.getAuthenticatedClient()
+    expect(refreshed.credentials.access_token).toBe('new-at')
+    expect(refreshed.credentials.refresh_token).toBe('rt') // preserved from the original save
+    await auth.clear()
   })
 })

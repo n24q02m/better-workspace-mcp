@@ -30,4 +30,11 @@ describe('credential-state', () => {
     await resetState()
     expect(getState()).toBe('awaiting_setup')
   })
+
+  it('falls back to awaiting_setup when getAuthenticatedClient() throws (no token stored)', async () => {
+    // No saveTokens call -- getAuthenticatedClient() throws 'not configured',
+    // exercising resolveCredentialState()'s catch branch.
+    expect(await resolveCredentialState()).toBe('awaiting_setup')
+    expect(getState()).toBe('awaiting_setup')
+  })
 })

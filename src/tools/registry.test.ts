@@ -273,6 +273,19 @@ describe('registerTools', () => {
       expect(result.content[0].text).toContain("Did you mean 'docs'?")
     })
 
+    it('errors for an unknown tool with no close match (no suggestion appended)', async () => {
+      const handler = getHandler(server, 'tools/call')
+
+      const result = await handler({
+        method: 'tools/call',
+        params: { name: 'zzzzzzzzz', arguments: { action: 'getText' } }
+      })
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toContain('Unknown tool: zzzzzzzzz.')
+      expect(result.content[0].text).not.toContain('Did you mean')
+    })
+
     it('wraps a WorkspaceMCPError thrown by a domain tool into an isError response', async () => {
       vi.mocked(docs).mockRejectedValue(new WorkspaceMCPError('Document not found', 'NOT_FOUND', 'Check the ID'))
       const handler = getHandler(server, 'tools/call')

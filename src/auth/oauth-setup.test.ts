@@ -33,6 +33,16 @@ describe('deriveSubject', () => {
   it('falls back to local-user when there is no id_token', () => {
     expect(deriveSubject({})).toBe('local-user')
   })
+
+  it('falls back to local-user when the id_token has an empty payload segment', () => {
+    // 'header.' -> split('.')[1] === '' (falsy), never reaches the JSON.parse branch.
+    expect(deriveSubject({ id_token: 'header.' })).toBe('local-user')
+  })
+
+  it('falls back to local-user when the payload decodes but has neither sub nor email', () => {
+    const idToken = fakeIdToken({ aud: 'some-client-id' })
+    expect(deriveSubject({ id_token: idToken })).toBe('local-user')
+  })
 })
 
 describe('runOAuthSetup', () => {
@@ -53,7 +63,12 @@ describe('runOAuthSetup', () => {
     const closeMock = vi.fn().mockResolvedValue(undefined)
     let capturedSub: string | undefined
 
-    runHttpServerMock.mockImplementation(async (_factory: () => unknown, options: any) => {
+    runHttpServerMock.mockImplementation(async (factory: () => unknown, options: any) => {
+      // Exercise the real serverFactory lambda (constructs the placeholder
+      // Server passed to mcp-core's runHttpServer) -- mcp-core itself is
+      // mocked here and never calls it on its own.
+      expect(factory()).toBeDefined()
+
       // Task 0 field: offline access_type + forced consent -> refresh_token.
       expect(options.delegatedOAuth.upstream.authorizeParams).toEqual({
         access_type: 'offline',
