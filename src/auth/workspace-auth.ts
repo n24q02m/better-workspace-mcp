@@ -1,6 +1,6 @@
 import { PerPluginStore } from '@n24q02m/mcp-core/storage'
 import { type Auth, google } from 'googleapis'
-import { SERVER_NAME } from '../constants.js'
+import { STORE_PLUGIN } from '../constants.js'
 
 export interface GoogleTokens {
   access_token: string
@@ -11,13 +11,21 @@ export interface GoogleTokens {
 }
 
 export class WorkspaceAuth {
-  private store = new PerPluginStore(SERVER_NAME) // single-user stdio: sub=null → LocalFsBackend (~/.better-workspace-mcp/config.json)
+  private store = new PerPluginStore(STORE_PLUGIN) // single-user stdio: sub=null → LocalFsBackend (~/.better-workspace-mcp/config.json)
 
   // scopes kept for parity with the upstream AuthManager(scopes) contract; used by the OAuth setup flow (Task 5).
   constructor(public readonly scopes: string[]) {}
 
   async saveTokens(tokens: GoogleTokens): Promise<void> {
-    await this.store.save(tokens as unknown as Record<string, unknown>)
+    // Google's raw token response carries expires_in (relative seconds), not expiry_date
+    // (absolute ms). Compute it here so getAuthenticatedClient can refresh proactively
+    // instead of only reacting to a 401.
+    const withExpiry = { ...tokens }
+    const rawExpiresIn = (tokens as unknown as Record<string, unknown>).expires_in
+    if (withExpiry.expiry_date === undefined && typeof rawExpiresIn === 'number') {
+      withExpiry.expiry_date = Date.now() + rawExpiresIn * 1000
+    }
+    await this.store.save(withExpiry as unknown as Record<string, unknown>)
   }
 
   async clear(): Promise<void> {
