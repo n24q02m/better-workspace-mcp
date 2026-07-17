@@ -1,0 +1,44 @@
+{
+  "name": "@n24q02m/better-workspace-mcp",
+  "mcpName": "io.github.n24q02m/better-workspace-mcp",
+  "version": "0.0.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "packageManager": "bun@1.2.21",
+  "publishConfig": { "access": "public" },
+  "scripts": {
+    "build": "tsc -build && node scripts/build-cli.js",
+    "dev": "tsx watch scripts/start-server.ts",
+    "test": "vitest --passWithNoTests",
+    "test:coverage": "vitest --coverage",
+    "lint": "biome lint src",
+    "format": "biome format --write .",
+    "type-check": "tsc --noEmit",
+    "check": "biome check . && bun run type-check",
+    "check:fix": "biome check --write . && bun run type-check",
+    "prepublishOnly": "bun run build"
+  },
+  "bin": { "better-workspace-mcp": "bin/cli.mjs" },
+  "engines": { "node": ">=24.18.0" },
+  "files": ["build/", "bin/", "README.md", "LICENSE", "NOTICE"],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@n24q02m/mcp-core": "file:../mcp-core.wsauthparams/packages/core-ts",
+    "googleapis": "^173.0.0",
+    "google-auth-library": "^10.9.0",
+    "zod": "^4.4.3"
+  },
+  "trustedDependencies": ["esbuild"],
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.2",
+    "@types/node": "^26.1.0",
+    "@vitest/coverage-v8": "^4.1.9",
+    "esbuild": "^0.28.1",
+    "tsx": "^4.23.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.9"
+  },
+  "main": "build/src/init-server.js",
+  "repository": { "type": "git", "url": "https://github.com/n24q02m/better-workspace-mcp.git" },
+  "author": "n24q02m"
+}

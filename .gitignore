@@ -1,0 +1,64 @@
+# Binaries
+/better-workspace-mcp
+*.exe
+*.dll
+*.so
+*.dylib
+dist/
+
+# Test
+coverage
+*.out
+*.test
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets (local dev provider files)
+.secrets.*.yaml
+.secrets.*.yml
+.env
+.env.*
+
+# Build
+vendor/
+build/
+*.tsbuildinfo
+
+# Node (Astro Starlight docs)
+node_modules/
+docs/dist/
+docs/.astro/
+
+# Branding asset raw outputs (regenerable via scripts/gen-branding.py)
+docs/public/raw/
+
+# Installer scripts are sourced from repo root; CD syncs to docs/public/ at build time
+docs/public/install.sh
+docs/public/install.ps1
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Agent artifacts (not committed)
+.jules/
+.code-review-graph/
+.claude-plugin/
+.wrangler/
+
+# AI Assistant / Rules
+.jules/
+.jules
+.superpower/
+superpower/
+superpowers/
+docs/superpowers/
+

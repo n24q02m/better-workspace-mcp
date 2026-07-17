@@ -1,0 +1,10 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "name": "io.github.n24q02m/better-workspace-mcp",
+  "description": "Google Workspace MCP server \u2014 Docs/Drive/Calendar/Gmail/Sheets/Slides/Tasks/Chat/People + multi-account",
+  "version": "0.1.0",
+  "repository": {
+    "url": "https://github.com/n24q02m/better-workspace-mcp",
+    "source": "github"
+  }
+}
