@@ -47,8 +47,10 @@ export async function runOAuthSetup(): Promise<void> {
     throw new Error('GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET required for OAuth setup.')
   }
   let resolveDone: () => void
-  const finished = new Promise<void>((r) => {
-    resolveDone = r
+  let rejectDone: (err: unknown) => void
+  const finished = new Promise<void>((res, rej) => {
+    resolveDone = res
+    rejectDone = rej
   })
 
   // mcp-core's serverFactory type is McpServer (the high-level SDK wrapper),
@@ -71,10 +73,15 @@ export async function runOAuthSetup(): Promise<void> {
           authorizeParams: { access_type: 'offline', prompt: 'consent' } // Task 0 mcp-core field → refresh_token
         },
         onTokenReceived: async (tokens) => {
-          await getAuth().saveTokens(tokens as unknown as GoogleTokens)
-          const sub = deriveSubject(tokens as Record<string, unknown>)
-          resolveDone()
-          return sub
+          try {
+            await getAuth().saveTokens(tokens as unknown as GoogleTokens)
+            const sub = deriveSubject(tokens as Record<string, unknown>)
+            resolveDone()
+            return sub
+          } catch (err) {
+            rejectDone(err)
+            throw err // let mcp-core also surface its 500 to the browser
+          }
         }
       }
     }
@@ -82,6 +89,9 @@ export async function runOAuthSetup(): Promise<void> {
   process.stderr.write(
     `[${SERVER_NAME}] Open http://${handle.host}:${handle.port}/ in a browser to authorize Google.\n`
   )
-  await finished
-  await handle.close()
+  try {
+    await finished
+  } finally {
+    await handle.close()
+  }
 }

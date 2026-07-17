@@ -78,4 +78,29 @@ describe('runOAuthSetup', () => {
     expect(saveTokensMock).toHaveBeenCalledWith(expect.objectContaining({ access_token: 'at', refresh_token: 'rt' }))
     expect(closeMock).toHaveBeenCalledOnce()
   })
+
+  // Regression test: a saveTokens disk error used to leave `finished` unresolved
+  // forever (no reject path), hanging runOAuthSetup with no timeout and no stderr.
+  // Short test timeout so a reintroduced hang fails fast instead of stalling the suite.
+  it('rejects (does not hang) and still closes the server when saveTokens throws', async () => {
+    const closeMock = vi.fn().mockResolvedValue(undefined)
+    const saveError = new Error('EACCES: disk write failed')
+    saveTokensMock.mockRejectedValueOnce(saveError)
+
+    runHttpServerMock.mockImplementation(async (_factory: () => unknown, options: any) => {
+      const idToken = fakeIdToken({ sub: 'google-user-123' })
+      await expect(
+        options.delegatedOAuth.onTokenReceived({
+          id_token: idToken,
+          access_token: 'at',
+          refresh_token: 'rt'
+        })
+      ).rejects.toThrow(saveError)
+
+      return { host: '127.0.0.1', port: 1, close: closeMock }
+    })
+
+    await expect(runOAuthSetup()).rejects.toThrow(saveError)
+    expect(closeMock).toHaveBeenCalledOnce()
+  }, 1000)
 })

@@ -13,7 +13,8 @@ export interface GoogleTokens {
 export class WorkspaceAuth {
   private store = new PerPluginStore(STORE_PLUGIN) // single-user stdio: sub=null → LocalFsBackend (~/.better-workspace-mcp/config.json)
 
-  // scopes kept for parity with the upstream AuthManager(scopes) contract; used by the OAuth setup flow (Task 5).
+  // scopes kept for parity with the upstream AuthManager(scopes) contract; not currently read
+  // by the OAuth setup flow, which uses its own WORKSPACE_SCOPES (see oauth-setup.ts).
   constructor(public readonly scopes: string[]) {}
 
   async saveTokens(tokens: GoogleTokens): Promise<void> {
