@@ -21,7 +21,8 @@ import { DOMAINS, type DomainDef } from './domains/index.js'
 import { aiReadableMessage, findClosestMatch, WorkspaceMCPError } from './helpers/errors.js'
 
 // Tools that work without a configured Google account
-const TOKEN_FREE_TOOLS = new Set(['config', 'help'])
+// 'time' is a no-auth domain (local date/time helpers) — exempt from the credential gate.
+const TOKEN_FREE_TOOLS = new Set(['config', 'help', 'time'])
 
 // Get docs directory path - works for both bundled CLI and unbundled code
 const __filename = fileURLToPath(import.meta.url)

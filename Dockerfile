@@ -1,4 +1,4 @@
-# Better Notion MCP - Optimized for AI Agents
+# Better Workspace MCP - Optimized for AI Agents
 # Multi-target Dockerfile: `:stdio` (default for clients) + `:http` (self-hosted daemon).
 # See spec 2026-04-30-multi-mode-stdio-http-architecture.md.
 # syntax=docker/dockerfile:1
