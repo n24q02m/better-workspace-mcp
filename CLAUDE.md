@@ -31,4 +31,4 @@ bun run build       # tsc -build + scripts/build-cli.js -> bin/cli.mjs
 
 ## Dependency dac biet
 
-`@n24q02m/mcp-core` pin qua `file:../mcp-core.wsauthparams/packages/core-ts` — link toi worktree merged-but-unpublished chua feature `authorizeParams`. Day la INTENTIONAL cho M1 dev; chuyen sang published `^1.20.x` beta truoc khi publish package nay.
+`@n24q02m/mcp-core` pin `1.20.0-beta.3` (published npm, co feature `authorizeParams` cho Google refresh_token qua delegated redirect + access_type=offline). Beta nay = mcp-core main sau merge PR #669. Doi len `^1.20.x` stable khi mcp-core cut stable.
