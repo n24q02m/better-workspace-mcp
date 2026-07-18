@@ -8,6 +8,6 @@
 
 ## Reporting a Vulnerability
 
-Email: quangminh2422004@gmail.com
+Email: quangminh2402.dev@gmail.com
 
 Please do not open public issues for security vulnerabilities.

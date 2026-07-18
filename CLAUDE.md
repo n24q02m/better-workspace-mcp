@@ -27,7 +27,7 @@ bun run build       # tsc -build + scripts/build-cli.js -> bin/cli.mjs
 
 - License: Apache-2.0 (repo nay vendor code Apache-2.0, khac voi MIT cua cac MCP server khac trong stack).
 - `type-check` script chi chay `tsc --noEmit` (bo `-p tsconfig.worker.json`) vi `src/worker.ts` chua ton tai (M3 HTTP/CF). Khoi phuc `&& tsc --noEmit -p tsconfig.worker.json` khi worker.ts duoc tao o M3.
-- Test surface: 107 unit/component + hermetic protocol E2E (`tests/protocol/m1-stdio.test.ts`, stdio_client spawn bin/cli.mjs, seeded token, no real network). Real-Google smoke = thu cong (xem `.private` ledger).
+- Test surface: 107 unit/component + hermetic protocol E2E (`tests/protocol/m1-stdio.test.ts`, stdio_client spawn bin/cli.mjs, seeded token, no real network). Real-Google smoke = thu cong (manual, ngoai CI — can OAuth client + consent).
 
 ## Dependency dac biet
 
