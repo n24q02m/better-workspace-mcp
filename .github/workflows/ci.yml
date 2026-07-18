@@ -47,8 +47,10 @@ jobs:
       # before `bun run test` runs (a fresh CI checkout has no bin/ -- it's
       # gitignored, produced only by this build step).
       - run: bun run build
+      # test:coverage = `vitest --coverage`; enforces vitest.config.ts's
+      # coverage.thresholds, so a coverage regression fails this step.
       - name: Run tests with coverage
-        run: bun run test -- --coverage
+        run: bun run test:coverage
       - name: Upload coverage to Codecov
         if: github.event_name == 'push'
         uses: codecov/codecov-action@v5

@@ -1,10 +1,27 @@
+import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getTransportMode } from './main.js'
 
-// startServer/bootstrap are NOT invoked here -- stdio mode now runs a real
-// OAuth setup (browser flow) when unconfigured, which this task must not
-// trigger (Task 6 owns the real-flow test, with a real Google client). Only
-// the pure helper is exercised.
+// startServer/bootstrap need every I/O-touching dependency mocked so the
+// suite stays hermetic: no real Google OAuth, no real stdio transport.
+vi.mock('./auth/credential-state.js', () => ({
+  getState: vi.fn(),
+  resolveCredentialState: vi.fn()
+}))
+vi.mock('./auth/oauth-setup.js', () => ({ runOAuthSetup: vi.fn() }))
+vi.mock('./tools/registry.js', () => ({ registerTools: vi.fn() }))
+vi.mock('@modelcontextprotocol/sdk/server/stdio.js', () => ({
+  // Must be `new`-able (main.ts does `new StdioServerTransport()`) -- an
+  // arrow-function mock implementation cannot be a constructor.
+  StdioServerTransport: vi.fn(function StdioServerTransport(this: { start: () => Promise<void> }) {
+    this.start = vi.fn().mockResolvedValue(undefined)
+  })
+}))
+
+import { getState, resolveCredentialState } from './auth/credential-state.js'
+import { runOAuthSetup } from './auth/oauth-setup.js'
+import { bootstrap, getTransportMode, startServer } from './main.js'
+import { registerTools } from './tools/registry.js'
+
 describe('getTransportMode', () => {
   const originalEnv = process.env
   const originalArgv = process.argv
@@ -43,5 +60,90 @@ describe('getTransportMode', () => {
   it('reads current process.env / process.argv when no arguments are provided', () => {
     vi.stubEnv('TRANSPORT_MODE', 'http')
     expect(getTransportMode()).toBe('http')
+  })
+})
+
+describe('startServer', () => {
+  const originalEnv = process.env
+  let errorSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    // Fresh copy each test -- startServer mutates BETTER_WORKSPACE_MCP_BOOTSTRAPPED
+    // as a side effect, so this must not leak between tests.
+    process.env = { ...originalEnv }
+    vi.clearAllMocks()
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  })
+
+  afterEach(() => {
+    process.env = originalEnv
+    errorSpy.mockRestore()
+  })
+
+  it('throws the Milestone-3 error for http mode', async () => {
+    await expect(startServer('http')).rejects.toThrow('http mode is Milestone 3 (not yet implemented)')
+  })
+
+  it('serves directly without OAuth setup when already configured', async () => {
+    vi.mocked(resolveCredentialState).mockResolvedValue('configured')
+    vi.mocked(getState).mockReturnValue('configured')
+
+    await startServer('stdio')
+
+    expect(runOAuthSetup).not.toHaveBeenCalled()
+    expect(resolveCredentialState).toHaveBeenCalledOnce()
+    expect(registerTools).toHaveBeenCalledWith(expect.any(Server))
+  })
+
+  it('runs OAuth setup before serving when not yet configured', async () => {
+    vi.mocked(resolveCredentialState).mockResolvedValue('awaiting_setup')
+    vi.mocked(getState).mockReturnValue('awaiting_setup')
+    vi.mocked(runOAuthSetup).mockResolvedValue(undefined)
+
+    await startServer('stdio')
+
+    expect(runOAuthSetup).toHaveBeenCalledOnce()
+    expect(resolveCredentialState).toHaveBeenCalledTimes(2)
+    expect(registerTools).toHaveBeenCalledWith(expect.any(Server))
+  })
+
+  it('returns early on a second call in the same process (fork-bomb guard)', async () => {
+    process.env.BETTER_WORKSPACE_MCP_BOOTSTRAPPED = 'true'
+
+    // 'http' would reject (see the test above) if the guard didn't
+    // short-circuit before the mode check -- proves the early return.
+    await expect(startServer('http')).resolves.toBeUndefined()
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Startup aborted'))
+    expect(resolveCredentialState).not.toHaveBeenCalled()
+    expect(registerTools).not.toHaveBeenCalled()
+  })
+})
+
+describe('bootstrap', () => {
+  const originalEnv = process.env
+  let exitSpy: ReturnType<typeof vi.spyOn>
+  let errorSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    process.env = { ...originalEnv }
+    vi.clearAllMocks()
+    exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never)
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  })
+
+  afterEach(() => {
+    process.env = originalEnv
+    exitSpy.mockRestore()
+    errorSpy.mockRestore()
+  })
+
+  it('catches a thrown error and exits the process with code 1', async () => {
+    // selectedMode 'http' drives the real (unmocked, same-module) startServer
+    // into its Milestone-3 throw, which bootstrap must catch.
+    await bootstrap('http')
+
+    expect(errorSpy).toHaveBeenCalledWith('Failed to start server:', 'http mode is Milestone 3 (not yet implemented)')
+    expect(exitSpy).toHaveBeenCalledWith(1)
   })
 })
