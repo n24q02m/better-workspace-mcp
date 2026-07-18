@@ -55,7 +55,7 @@ jobs:
           token: ${{ secrets.GH_PAT }}
           fetch-depth: 0
 
-      - uses: python-semantic-release/python-semantic-release@v10
+      - uses: n24q02m/better-semantic-release@v1
         id: release
         with:
           github_token: ${{ secrets.GH_PAT }}
