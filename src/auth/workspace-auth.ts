@@ -12,6 +12,7 @@ export interface GoogleTokens {
 
 export class WorkspaceAuth {
   private store = new PerPluginStore(STORE_PLUGIN) // single-user stdio: sub=null → LocalFsBackend (~/.better-workspace-mcp/config.json)
+  private cachedClient: Auth.OAuth2Client | null = null
 
   // scopes kept for parity with the upstream AuthManager(scopes) contract; not currently read
   // by the OAuth setup flow, which uses its own WORKSPACE_SCOPES (see oauth-setup.ts).
@@ -27,13 +28,21 @@ export class WorkspaceAuth {
       withExpiry.expiry_date = Date.now() + rawExpiresIn * 1000
     }
     await this.store.save(withExpiry as unknown as Record<string, unknown>)
+    if (this.cachedClient) {
+      this.cachedClient.setCredentials(withExpiry)
+    }
   }
 
   async clear(): Promise<void> {
     await this.store.clear()
+    this.cachedClient = null
   }
 
   async getAuthenticatedClient(): Promise<Auth.OAuth2Client> {
+    if (this.cachedClient) {
+      return this.cachedClient
+    }
+
     const raw = (await this.store.load()) as GoogleTokens | null
     if (!raw?.access_token) {
       throw new Error(
@@ -58,6 +67,7 @@ export class WorkspaceAuth {
     client.on('tokens', (t) => {
       void this.saveTokens({ ...raw, ...t } as GoogleTokens)
     })
+    this.cachedClient = client
     return client
   }
 }
