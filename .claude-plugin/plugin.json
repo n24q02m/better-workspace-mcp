@@ -1,0 +1,37 @@
+{
+  "name": "better-workspace-mcp",
+  "version": "0.1.0",
+  "description": "Google Workspace MCP server — Docs/Drive/Calendar/Gmail/Sheets/Slides/Tasks/Chat/People + multi-account",
+  "userConfig": {
+    "GOOGLE_OAUTH_CLIENT_ID": {
+      "type": "string",
+      "title": "Google OAuth Client ID",
+      "description": "OAuth 2.0 Desktop client ID from Google Cloud Console (APIs & Services > Credentials)",
+      "sensitive": false,
+      "required": true
+    },
+    "GOOGLE_OAUTH_CLIENT_SECRET": {
+      "type": "string",
+      "title": "Google OAuth Client Secret",
+      "description": "OAuth 2.0 Desktop client secret (paired with the client ID above)",
+      "sensitive": true,
+      "required": true
+    }
+  },
+  "author": {
+    "name": "n24q02m",
+    "url": "https://github.com/n24q02m"
+  },
+  "homepage": "https://github.com/n24q02m/better-workspace-mcp",
+  "mcpServers": {
+    "better-workspace-mcp": {
+      "command": "npx",
+      "args": ["--yes", "@n24q02m/better-workspace-mcp@latest"],
+      "env": {
+        "MCP_TRANSPORT": "stdio",
+        "GOOGLE_OAUTH_CLIENT_ID": "${user_config.GOOGLE_OAUTH_CLIENT_ID}",
+        "GOOGLE_OAUTH_CLIENT_SECRET": "${user_config.GOOGLE_OAUTH_CLIENT_SECRET}"
+      }
+    }
+  }
+}
