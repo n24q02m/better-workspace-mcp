@@ -51,73 +51,80 @@ export class SheetsService {
       const sheetNames =
         spreadsheet.data.sheets?.map((sheet) => sheet.properties?.title) || [];
 
-      // Get data from all sheets
-      for (const sheetName of sheetNames) {
-        if (!sheetName) continue;
+      // Get data from all sheets concurrently
+      const validSheetNames = sheetNames.filter((name): name is string => Boolean(name));
 
-        try {
-          const response = await sheets.spreadsheets.values.get({
-            spreadsheetId: id,
-            range: `'${sheetName}'`,
-          });
+      const sheetResults = await Promise.all(
+        validSheetNames.map(async (sheetName) => {
+          try {
+            const response = await sheets.spreadsheets.values.get({
+              spreadsheetId: id,
+              range: `'${sheetName}'`,
+            });
 
-          const values = response.data.values || [];
+            const values = response.data.values || [];
 
-          if (format === 'json') {
-            // Collect data for JSON structure
-            jsonData[sheetName] = values;
-          } else {
-            // Add sheet name as context
-            content += `Sheet Name: ${sheetName}\n`;
-
-            if (values.length === 0) {
-              content += '(Empty sheet)\n';
+            if (format === 'json') {
+              // Collect data for JSON structure (assigned safely across async boundaries)
+              jsonData[sheetName] = values;
+              return '';
             } else {
-              // Process each row
-              values.forEach((row) => {
-                if (format === 'csv') {
-                  // Convert to CSV format
-                  const csvRow = row
-                    .map((cell) => {
-                      // Escape quotes and wrap in quotes if contains comma or quotes
-                      const cellStr = String(cell || '');
-                      if (
-                        cellStr.includes(',') ||
-                        cellStr.includes('"') ||
-                        cellStr.includes('\n')
-                      ) {
-                        return `"${cellStr.replace(/"/g, '""')}"`;
-                      }
-                      return cellStr;
-                    })
-                    .join(',');
-                  content += csvRow + '\n';
-                } else {
-                  // Plain text format with pipe separators for readability
-                  content += row.map((cell) => cell || '').join(' | ') + '\n';
-                }
-              });
+              let sheetContent = `Sheet Name: ${sheetName}\n`;
+
+              if (values.length === 0) {
+                sheetContent += '(Empty sheet)\n';
+              } else {
+                // Process each row
+                values.forEach((row) => {
+                  if (format === 'csv') {
+                    // Convert to CSV format
+                    const csvRow = row
+                      .map((cell) => {
+                        // Escape quotes and wrap in quotes if contains comma or quotes
+                        const cellStr = String(cell || '');
+                        if (
+                          cellStr.includes(',') ||
+                          cellStr.includes('"') ||
+                          cellStr.includes('\n')
+                        ) {
+                          return `"${cellStr.replace(/"/g, '""')}"`;
+                        }
+                        return cellStr;
+                      })
+                      .join(',');
+                    sheetContent += csvRow + '\n';
+                  } else {
+                    // Plain text format with pipe separators for readability
+                    sheetContent += row.map((cell) => cell || '').join(' | ') + '\n';
+                  }
+                });
+              }
+              sheetContent += '\n';
+              return sheetContent;
             }
-            content += '\n';
-          }
-        } catch (sheetError) {
-          logToFile(
-            `[SheetsService] Error reading sheet ${sheetName}: ${sheetError}`,
-          );
-          if (format === 'json') {
-            // For JSON format, we'll skip sheets with errors
+          } catch (sheetError) {
             logToFile(
-              `[SheetsService] Skipping sheet ${sheetName} in JSON output due to error`,
+              `[SheetsService] Error reading sheet ${sheetName}: ${sheetError}`,
             );
-          } else {
-            content += `Sheet Name: ${sheetName}\n(Error reading sheet)\n\n`;
+            if (format === 'json') {
+              // For JSON format, we'll skip sheets with errors
+              logToFile(
+                `[SheetsService] Skipping sheet ${sheetName} in JSON output due to error`,
+              );
+              return '';
+            } else {
+              return `Sheet Name: ${sheetName}\n(Error reading sheet)\n\n`;
+            }
           }
-        }
-      }
+        })
+      );
 
       if (format === 'json') {
         // Generate clean JSON output from collected data
         content = JSON.stringify(jsonData, null, 2);
+      } else {
+        // Append all text results sequentially to preserve order
+        content += sheetResults.join('');
       }
 
       logToFile(`[SheetsService] Finished getText for spreadsheet: ${id}`);
