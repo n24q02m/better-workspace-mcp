@@ -12,5 +12,12 @@
   "semanticCommitScope": "deps",
   "golang": {
     "postUpdateOptions": ["gomodTidy"]
-  }
+  },
+  "packageRules": [
+    {
+      "description": "Pin GitHub Actions to SHA for security",
+      "matchManagers": ["github-actions"],
+      "pinDigests": true
+    }
+  ]
 }
