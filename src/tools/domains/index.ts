@@ -72,7 +72,7 @@ export const DOMAINS: DomainDef[] = [
   },
   {
     name: 'drive',
-    description: 'Drive operations. Actions: ' + DRIVE_ACTIONS.join(', ') + '. account accepted (M1 ignored).',
+    description: `Drive operations. Actions: ${DRIVE_ACTIONS.join(', ')}. account accepted (M1 ignored).`,
     actions: DRIVE_ACTIONS,
     inputProps: {
       fileId: { type: 'string' },
@@ -88,7 +88,7 @@ export const DOMAINS: DomainDef[] = [
   },
   {
     name: 'calendar',
-    description: 'Calendar operations. Actions: ' + CALENDAR_ACTIONS.join(', ') + '. account accepted (M1 ignored).',
+    description: `Calendar operations. Actions: ${CALENDAR_ACTIONS.join(', ')}. account accepted (M1 ignored).`,
     actions: CALENDAR_ACTIONS,
     inputProps: {
       calendarId: { type: 'string' },
@@ -103,7 +103,7 @@ export const DOMAINS: DomainDef[] = [
   },
   {
     name: 'chat',
-    description: 'Chat operations. Actions: ' + CHAT_ACTIONS.join(', ') + '. account accepted (M1 ignored).',
+    description: `Chat operations. Actions: ${CHAT_ACTIONS.join(', ')}. account accepted (M1 ignored).`,
     actions: CHAT_ACTIONS,
     inputProps: {
       spaceId: { type: 'string' },
@@ -116,7 +116,7 @@ export const DOMAINS: DomainDef[] = [
   },
   {
     name: 'gmail',
-    description: 'Gmail operations. Actions: ' + GMAIL_ACTIONS.join(', ') + '. account accepted (M1 ignored).',
+    description: `Gmail operations. Actions: ${GMAIL_ACTIONS.join(', ')}. account accepted (M1 ignored).`,
     actions: GMAIL_ACTIONS,
     inputProps: {
       query: { type: 'string' },
@@ -132,7 +132,7 @@ export const DOMAINS: DomainDef[] = [
   },
   {
     name: 'slides',
-    description: 'Slides operations. Actions: ' + SLIDES_ACTIONS.join(', ') + '. account accepted (M1 ignored).',
+    description: `Slides operations. Actions: ${SLIDES_ACTIONS.join(', ')}. account accepted (M1 ignored).`,
     actions: SLIDES_ACTIONS,
     inputProps: {
       presentationId: { type: 'string' },
@@ -144,7 +144,7 @@ export const DOMAINS: DomainDef[] = [
   },
   {
     name: 'sheets',
-    description: 'Sheets operations. Actions: ' + SHEETS_ACTIONS.join(', ') + '. account accepted (M1 ignored).',
+    description: `Sheets operations. Actions: ${SHEETS_ACTIONS.join(', ')}. account accepted (M1 ignored).`,
     actions: SHEETS_ACTIONS,
     inputProps: {
       spreadsheetId: { type: 'string' },
@@ -154,7 +154,7 @@ export const DOMAINS: DomainDef[] = [
   },
   {
     name: 'tasks',
-    description: 'Tasks operations. Actions: ' + TASKS_ACTIONS.join(', ') + '. account accepted (M1 ignored).',
+    description: `Tasks operations. Actions: ${TASKS_ACTIONS.join(', ')}. account accepted (M1 ignored).`,
     actions: TASKS_ACTIONS,
     inputProps: {
       taskListId: { type: 'string' },
@@ -167,7 +167,7 @@ export const DOMAINS: DomainDef[] = [
   },
   {
     name: 'people',
-    description: 'People operations. Actions: ' + PEOPLE_ACTIONS.join(', ') + '. account accepted (M1 ignored).',
+    description: `People operations. Actions: ${PEOPLE_ACTIONS.join(', ')}. account accepted (M1 ignored).`,
     actions: PEOPLE_ACTIONS,
     inputProps: {
       resourceName: { type: 'string' }
