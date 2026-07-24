@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import crypto from 'node:crypto';
+
 /**
  * Helper class for creating RFC 2822 compliant MIME messages for Gmail API
  */
@@ -150,7 +152,7 @@ export class MimeHelper {
     }>;
     isHtml?: boolean;
   }): string {
-    const boundary = `boundary_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const boundary = `boundary_${Date.now()}_${crypto.randomUUID().replace(/-/g, '')}`;
     const utf8Subject = `=?utf-8?B?${Buffer.from(subject).toString('base64')}?=`;
 
     const messageParts: string[] = [];
