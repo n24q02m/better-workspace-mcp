@@ -76,19 +76,28 @@ present -- no network needed, and that is the usual case. Otherwise the server a
 Google's userinfo endpoint, which needs network access and a token that is still
 valid or refreshable.
 
-If neither works, nothing is discarded: the old blob is left exactly as it was.
-But the server reports itself as awaiting setup and opens the browser OAuth flow
-even though the stored token may still be fine, and completing that consent will
-not save either -- the store refuses to overwrite an unadopted single-account blob
-rather than risk dropping its `refresh_token`, so startup fails with *"Refusing to
-overwrite credentials stored in the older single-account layout"*.
+If neither works, the server reports itself as awaiting setup and opens the browser
+OAuth flow even though the stored token may still be fine. Completing that consent
+works, and nothing is discarded: the account you just authorized is stored and
+becomes the primary, while the old tokens are carried across under the key
+`(unidentified)` rather than being overwritten. `config(action="account_list")` then
+shows two entries:
 
-If that happens, start the server again with network access so the adoption can
-finish. If the old credential is genuinely dead, move `~/.better-workspace-mcp/config.json`
-aside and authorize from scratch. (`config(action="setup_reset")` clears the same
-file, but only while a server is running -- which it is not, once startup has
-failed.) After a successful adoption, `config(action="account_list")` shows exactly
-one account, and it is the primary.
+```json
+{ "accounts": ["(unidentified)", "you@example.com"], "primary": "you@example.com" }
+```
+
+Nothing routes to `(unidentified)`: it is never promoted to primary while a real
+account remains, and no call reaches it unless you name it explicitly. It is there
+so a credential whose owner could not be determined is not silently thrown away.
+Remove it once the re-authorized account is working:
+
+```json
+{ "action": "account_remove", "account": "(unidentified)" }
+```
+
+After a successful adoption -- the usual case -- `config(action="account_list")`
+shows exactly one account, and it is the primary.
 
 ### Forms scopes and re-consent
 

@@ -71,17 +71,25 @@ the account's email:
 - Otherwise the server asks Google's userinfo endpoint, which needs network
   access and a token that is still valid or refreshable.
 
-If neither works the old blob is left untouched -- nothing is discarded -- but the
-state falls back to `awaiting_setup` and the server starts the browser OAuth flow
-even though the stored token may still be good. Completing that consent does not
-save either: the store refuses to overwrite an unadopted single-account blob
-rather than risk dropping its `refresh_token`, so startup fails with *"Refusing to
-overwrite credentials stored in the older single-account layout"*.
+If neither works, the state falls back to `awaiting_setup` and the server starts the
+browser OAuth flow even though the stored token may still be good. Completing that
+consent does work, and nothing is discarded: the newly authorized account is stored
+and becomes the primary, and the old blob is carried across under the key
+`(unidentified)` rather than being overwritten. `account_list` then shows two
+entries:
 
-To recover, run the server again with network access so the adoption can finish.
-If the old credential is genuinely dead, move `~/.better-workspace-mcp/config.json`
-aside and authorize from scratch -- `setup_reset` does the same thing, but only
-while a server is running, which is not the case once startup has already failed.
+```json
+{ "accounts": ["(unidentified)", "you@example.com"], "primary": "you@example.com" }
+```
 
-After a successful adoption, `account_list` shows exactly one account and it is
-the primary.
+`(unidentified)` holds the tokens whose owner could not be determined. Nothing
+routes to it -- it is never promoted to primary while a real account remains, and
+no call can select it unless you name it. Remove it once the re-authorized account
+is working:
+
+```json
+{ "action": "account_remove", "account": "(unidentified)" }
+```
+
+After a successful adoption -- the usual case -- `account_list` shows exactly one
+account and it is the primary.
