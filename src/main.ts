@@ -9,8 +9,7 @@
  *     người dùng một bucket credential theo JWT sub (src/transports/http.ts).
  */
 
-import { readFileSync, realpathSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
@@ -18,17 +17,7 @@ import { getState, resolveCredentialState } from './auth/credential-state.js'
 import { runOAuthSetup } from './auth/oauth-setup.js'
 import { SERVER_NAME } from './constants.js'
 import { registerTools } from './tools/registry.js'
-
-function getPackageVersion(): string {
-  try {
-    const here = dirname(fileURLToPath(import.meta.url))
-    const pkgPath = join(here, '..', 'package.json')
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version?: string }
-    return pkg.version ?? '0.0.0'
-  } catch {
-    return '0.0.0'
-  }
-}
+import { getPackageVersion } from './version.js'
 
 /**
  * Checks if the current module is the main entry point.

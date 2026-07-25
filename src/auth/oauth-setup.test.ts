@@ -17,7 +17,7 @@ vi.mock('@n24q02m/mcp-core', () => ({
 }))
 
 // Import after the mocks above so oauth-setup.ts binds the mocked modules.
-const { deriveSubject, runOAuthSetup, WORKSPACE_SCOPES } = await import('./oauth-setup.js')
+const { deriveSubject, deriveSubjectStrict, runOAuthSetup, WORKSPACE_SCOPES } = await import('./oauth-setup.js')
 
 const GRACE_MS = 20
 
@@ -75,6 +75,50 @@ describe('deriveSubject', () => {
   it('falls back to local-user when the payload decodes but has neither sub nor email', () => {
     const idToken = fakeIdToken({ aud: 'some-client-id' })
     expect(deriveSubject({ id_token: idToken })).toBe('local-user')
+  })
+})
+
+describe('deriveSubjectStrict', () => {
+  // Ở stdio, `'local-user'` vô hại: một người dùng, một bucket. Ở remote thì MỌI
+  // người dùng không suy được danh tính sẽ dồn vào cùng bucket tên đó -- đúng cái
+  // silent fallback mà mcp-dev invariant 7 tồn tại để chặn, chỉ là ở đường GHI.
+  // Nên remote dùng bản strict này; nó ném chứ không bao giờ trả sentinel.
+  it('returns sub when the id_token carries one', () => {
+    const idToken = fakeIdToken({ sub: 'google-user-123', email: 'a@example.com' })
+    expect(deriveSubjectStrict({ id_token: idToken })).toBe('google-user-123')
+  })
+
+  it('falls back to email when sub is missing', () => {
+    const idToken = fakeIdToken({ email: 'a@example.com' })
+    expect(deriveSubjectStrict({ id_token: idToken })).toBe('a@example.com')
+  })
+
+  it('throws when there is no id_token', () => {
+    expect(() => deriveSubjectStrict({})).toThrow(/no usable/i)
+  })
+
+  it('throws when the id_token has an empty payload segment', () => {
+    expect(() => deriveSubjectStrict({ id_token: 'header.' })).toThrow(/no usable/i)
+  })
+
+  it('throws when the payload is not decodable JSON', () => {
+    expect(() => deriveSubjectStrict({ id_token: 'header.!!!not-json!!!.sig' })).toThrow(/no usable/i)
+  })
+
+  it('throws when the payload decodes but has neither sub nor email', () => {
+    const idToken = fakeIdToken({ aud: 'some-client-id' })
+    expect(() => deriveSubjectStrict({ id_token: idToken })).toThrow(/no usable/i)
+  })
+
+  it('throws on an empty-string sub instead of treating it as an identity', () => {
+    const idToken = fakeIdToken({ sub: '', email: '' })
+    expect(() => deriveSubjectStrict({ id_token: idToken })).toThrow(/no usable/i)
+  })
+
+  it('names the isolation reason, not just the parse failure', () => {
+    // Người đọc log phải hiểu vì sao bị từ chối: không có subject thì không có
+    // cách nào cách ly credential, chứ không phải "id_token hơi lạ".
+    expect(() => deriveSubjectStrict({})).toThrow(/isolat/i)
   })
 })
 

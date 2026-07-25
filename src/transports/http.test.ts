@@ -9,7 +9,7 @@
  * `startHttp()` chỉ resolve khi nhận SIGINT/SIGTERM, nên các test bắt options
  * dùng `void startHttp()` + `vi.waitFor` thay vì `await`.
  */
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
@@ -36,6 +36,7 @@ import { AccountStore } from '../auth/account-store.js'
 import { getState } from '../auth/credential-state.js'
 import { currentSubject } from '../auth/subject-context.js'
 import { STORE_PLUGIN } from '../constants.js'
+import { getPackageVersion } from '../version.js'
 // Static import, không `await import()` trong từng test: http.ts kéo theo
 // googleapis (~10s để nạp) và không đọc env lúc module-load, nên nạp một lần ở
 // pha import của vitest thay vì tính chi phí đó vào testTimeout của test đầu tiên.
@@ -342,5 +343,37 @@ describe('startHttp — onTokenReceived', () => {
     expect((await new AccountStore(sub).list()).accounts).toEqual(['owner@example.com'])
     // Và không rơi vào bucket nào khác: bucket single-user của stdio phải trống.
     expect((await new AccountStore().list()).accounts).toEqual([])
+  })
+
+  // Đường GHI phải fail-closed giống đường ĐỌC (`subjectFromClaims`). Bản
+  // `deriveSubject` có fallback `'local-user'` là đúng cho stdio nhưng ở remote
+  // sẽ dồn MỌI người dùng không suy được danh tính vào cùng một bucket, nên
+  // transport này gọi bản strict.
+  it('refuses to store anything when the token response carries no usable subject', async () => {
+    const opts = await captureOptions()
+
+    const consent = opts.delegatedOAuth.onTokenReceived({ access_token: 'at', refresh_token: 'rt' })
+    await expect(consent).rejects.toThrow(/no usable/i)
+
+    // Không ghi vào bucket 'local-user' (đích của fallback cũ), không ghi vào
+    // bucket stdio, và thực ra không ghi gì cả -- thư mục store chưa tồn tại.
+    expect((await new AccountStore('local-user').list()).accounts).toEqual([])
+    expect((await new AccountStore().list()).accounts).toEqual([])
+    expect(existsSync(join(home, '.better-workspace-mcp'))).toBe(false)
+  })
+})
+
+describe('startHttp — server identity', () => {
+  it('reports the package version, not a hardcoded 0.0.0', async () => {
+    await captureOptions()
+    const factory = runHttpServerMock.mock.calls[0]?.[0] as () => unknown
+
+    // `Server` không có getter public cho serverInfo; đường public duy nhất là
+    // một vòng initialize hoàn chỉnh, việc đó thuộc bộ protocol E2E. Đọc field
+    // riêng ở đây, đổi lấy việc pin được đúng chỗ đã hardcode '0.0.0'.
+    const serverInfo = (factory() as unknown as { _serverInfo: { name: string; version: string } })._serverInfo
+
+    expect(serverInfo.name).toBe('better-workspace-mcp')
+    expect(serverInfo.version).toBe(getPackageVersion())
   })
 })

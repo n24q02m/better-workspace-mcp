@@ -16,11 +16,12 @@ import { runHttpServer } from '@n24q02m/mcp-core'
 import { type SessionKv, wrapKvBackendAsSessionKv } from '@n24q02m/mcp-core/auth'
 import { backendFromEnv } from '@n24q02m/mcp-core/storage'
 import { getAuth, resolveCredentialState } from '../auth/credential-state.js'
-import { deriveSubject, WORKSPACE_SCOPES } from '../auth/oauth-setup.js'
+import { deriveSubjectStrict, WORKSPACE_SCOPES } from '../auth/oauth-setup.js'
 import { runWithSubject } from '../auth/subject-context.js'
 import type { GoogleTokens } from '../auth/workspace-auth.js'
 import { GOOGLE_AUTHORIZE_URL, GOOGLE_TOKEN_URL, SERVER_NAME, STORE_PLUGIN } from '../constants.js'
 import { registerTools } from '../tools/registry.js'
+import { getPackageVersion } from '../version.js'
 
 /**
  * Bucket của caller anonymous. mcp-core CHỈ cấp claims anonymous khi
@@ -121,7 +122,10 @@ export async function startHttp(): Promise<void> {
       // Một Server cho mỗi MCP session (mcp-core gọi factory này per session).
       // Cast như `oauth-setup.ts`: mcp-core khai kiểu McpServer nhưng chỉ gọi
       // `.connect(transport)`, thứ mà Server tầng thấp cũng có.
-      const server = new Server({ name: SERVER_NAME, version: '0.0.0' }, { capabilities: { tools: {}, resources: {} } })
+      const server = new Server(
+        { name: SERVER_NAME, version: getPackageVersion() },
+        { capabilities: { tools: {}, resources: {} } }
+      )
       registerTools(server)
       return server as unknown as McpServer
     },
@@ -146,7 +150,12 @@ export async function startHttp(): Promise<void> {
           authorizeParams: { access_type: 'offline', prompt: 'consent' } // điều kiện để Google trả refresh_token
         },
         onTokenReceived: async (tokens) => {
-          const sub = deriveSubject(tokens as Record<string, unknown>)
+          // STRICT: ném thay vì rơi về bucket dùng chung `'local-user'`. Đường ghi
+          // phải fail-closed giống `subjectFromClaims` ở đường đọc, nếu không thì
+          // hai đường lệch chuẩn nhau. mcp-core bọc callback này trong try/catch và
+          // trả 500 ra browser, nên người dùng thấy consent thất bại -- đúng, vì
+          // không có cách nào cất credential của họ tách khỏi người khác.
+          const sub = deriveSubjectStrict(tokens as Record<string, unknown>)
           // AWAIT, không fire-and-forget: mcp-core bọc callback này trong
           // try/catch và trả 500 "Failed to persist tokens" ra browser, nên store
           // hỏng lộ ra ngay lúc auth thay vì mất token âm thầm khi container bị
