@@ -19,6 +19,75 @@ export class SheetsService {
     return google.sheets({ version: 'v4', ...options });
   }
 
+  /**
+   * A1 range covering a whole sheet. The name is wrapped in single quotes, so a
+   * literal quote inside it has to be doubled ('It''s here') or the range is
+   * unparseable and that tab reads as an error.
+   */
+  private static sheetRange(sheetName: string): string {
+    return `'${sheetName.replace(/'/g, "''")}'`;
+  }
+
+  /**
+   * Reads every named sheet, preferring ONE `values.batchGet` over N
+   * `values.get`. batchGet is all-or-nothing -- a single unreadable range
+   * rejects the whole request -- so a failed batch falls back to reading tab by
+   * tab, which is what preserves partial success: one bad tab must not cost the
+   * other tabs their data. A `values` of null marks a tab that could not be read.
+   */
+  private async readAllSheets(
+    sheets: sheets_v4.Sheets,
+    spreadsheetId: string,
+    sheetNames: string[],
+  ): Promise<Array<{ sheetName: string; values: any[][] | null }>> {
+    if (sheetNames.length === 0) {
+      return [];
+    }
+
+    const ranges = sheetNames.map((name) => SheetsService.sheetRange(name));
+
+    try {
+      const response = await sheets.spreadsheets.values.batchGet({
+        spreadsheetId,
+        ranges,
+      });
+      const valueRanges = response.data.valueRanges;
+      // The API answers in request order, which is what lets us map back by
+      // index. A length mismatch would silently hand one tab another tab's
+      // rows, so treat it as a failed batch rather than trusting the order.
+      if (!valueRanges || valueRanges.length !== ranges.length) {
+        throw new Error(
+          `batchGet returned ${valueRanges?.length ?? 0} value ranges for ${ranges.length} sheets`,
+        );
+      }
+      return sheetNames.map((sheetName, index) => ({
+        sheetName,
+        values: valueRanges[index].values || [],
+      }));
+    } catch (batchError) {
+      logToFile(
+        `[SheetsService] batchGet failed, falling back to per-sheet reads: ${batchError}`,
+      );
+    }
+
+    const results: Array<{ sheetName: string; values: any[][] | null }> = [];
+    for (const sheetName of sheetNames) {
+      try {
+        const response = await sheets.spreadsheets.values.get({
+          spreadsheetId,
+          range: SheetsService.sheetRange(sheetName),
+        });
+        results.push({ sheetName, values: response.data.values || [] });
+      } catch (sheetError) {
+        logToFile(
+          `[SheetsService] Error reading sheet ${sheetName}: ${sheetError}`,
+        );
+        results.push({ sheetName, values: null });
+      }
+    }
+    return results;
+  }
+
   public getText = async ({
     spreadsheetId,
     format = 'text',
@@ -49,61 +118,15 @@ export class SheetsService {
 
       // Get all sheet names
       const sheetNames =
-        spreadsheet.data.sheets?.map((sheet) => sheet.properties?.title) || [];
+        spreadsheet.data.sheets
+          ?.map((sheet) => sheet.properties?.title)
+          .filter((title): title is string => !!title) || [];
 
       // Get data from all sheets
-      for (const sheetName of sheetNames) {
-        if (!sheetName) continue;
+      const sheetResults = await this.readAllSheets(sheets, id, sheetNames);
 
-        try {
-          const response = await sheets.spreadsheets.values.get({
-            spreadsheetId: id,
-            range: `'${sheetName}'`,
-          });
-
-          const values = response.data.values || [];
-
-          if (format === 'json') {
-            // Collect data for JSON structure
-            jsonData[sheetName] = values;
-          } else {
-            // Add sheet name as context
-            content += `Sheet Name: ${sheetName}\n`;
-
-            if (values.length === 0) {
-              content += '(Empty sheet)\n';
-            } else {
-              // Process each row
-              values.forEach((row) => {
-                if (format === 'csv') {
-                  // Convert to CSV format
-                  const csvRow = row
-                    .map((cell) => {
-                      // Escape quotes and wrap in quotes if contains comma or quotes
-                      const cellStr = String(cell || '');
-                      if (
-                        cellStr.includes(',') ||
-                        cellStr.includes('"') ||
-                        cellStr.includes('\n')
-                      ) {
-                        return `"${cellStr.replace(/"/g, '""')}"`;
-                      }
-                      return cellStr;
-                    })
-                    .join(',');
-                  content += csvRow + '\n';
-                } else {
-                  // Plain text format with pipe separators for readability
-                  content += row.map((cell) => cell || '').join(' | ') + '\n';
-                }
-              });
-            }
-            content += '\n';
-          }
-        } catch (sheetError) {
-          logToFile(
-            `[SheetsService] Error reading sheet ${sheetName}: ${sheetError}`,
-          );
+      for (const { sheetName, values } of sheetResults) {
+        if (values === null) {
           if (format === 'json') {
             // For JSON format, we'll skip sheets with errors
             logToFile(
@@ -112,6 +135,45 @@ export class SheetsService {
           } else {
             content += `Sheet Name: ${sheetName}\n(Error reading sheet)\n\n`;
           }
+          continue;
+        }
+
+        if (format === 'json') {
+          // Collect data for JSON structure
+          jsonData[sheetName] = values;
+        } else {
+          // Add sheet name as context
+          content += `Sheet Name: ${sheetName}\n`;
+
+          if (values.length === 0) {
+            content += '(Empty sheet)\n';
+          } else {
+            // Process each row
+            values.forEach((row) => {
+              if (format === 'csv') {
+                // Convert to CSV format
+                const csvRow = row
+                  .map((cell) => {
+                    // Escape quotes and wrap in quotes if contains comma or quotes
+                    const cellStr = String(cell || '');
+                    if (
+                      cellStr.includes(',') ||
+                      cellStr.includes('"') ||
+                      cellStr.includes('\n')
+                    ) {
+                      return `"${cellStr.replace(/"/g, '""')}"`;
+                    }
+                    return cellStr;
+                  })
+                  .join(',');
+                content += csvRow + '\n';
+              } else {
+                // Plain text format with pipe separators for readability
+                content += row.map((cell) => cell || '').join(' | ') + '\n';
+              }
+            });
+          }
+          content += '\n';
         }
       }
 
