@@ -35,7 +35,26 @@ export interface AddAccountFlow {
  */
 const FLOW_TTL_MS = 10 * 60 * 1000
 
-export async function startAddAccount(opts: { makePrimary?: boolean; ttlMs?: number } = {}): Promise<AddAccountFlow> {
+/**
+ * How long the temporary server outlives a SUCCESSFUL consent.
+ *
+ * A second consent tab is ordinary -- the user clicks the URL twice, the browser
+ * prefetches it, they reload the finished page, or another tool opens its own. Each tab
+ * runs its own PKCE handshake and comes back to `/callback` with its own code (mcp-core
+ * keys pending sessions on a per-tab nonce, so the late one is still valid), which means
+ * closing the server the instant the FIRST tab succeeds drops the second onto a dead
+ * port. Seen in the field: one tab showing "Setup complete", the other
+ * ERR_CONNECTION_REFUSED at 127.0.0.1:<port>/callback -- an error page for a consent
+ * that actually worked.
+ *
+ * Staying up this much longer gives a late tab somewhere to land; a second code for the
+ * same account just rewrites that account's record, so it is idempotent.
+ */
+const CLOSE_GRACE_MS = 10_000
+
+export async function startAddAccount(
+  opts: { makePrimary?: boolean; ttlMs?: number; graceMs?: number } = {}
+): Promise<AddAccountFlow> {
   const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID
   const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET
   if (!clientId || !clientSecret) {
@@ -93,12 +112,38 @@ export async function startAddAccount(opts: { makePrimary?: boolean; ttlMs?: num
     if (typeof timer.unref === 'function') timer.unref()
   })
 
+  // A close failure is nobody's outcome by the time it happens -- the consent has
+  // already been saved, or already failed on its own -- and this runs on a promise no
+  // caller holds. So say it on stderr rather than raising it into `done` (which would
+  // report a working consent as a failed one) or dropping it into an unhandled rejection.
+  const closeServer = (): void => {
+    void handle.close().catch((err) => {
+      console.error(`[${SERVER_NAME}] failed to close the add-account callback server:`, err)
+    })
+  }
+
   // race, NOT any: whichever settles first wins, so a real onTokenReceived failure
   // surfaces now. Promise.any ignores rejections, which would hide that error behind a
   // "timed out" ten minutes later.
-  const done = Promise.race([settled, timeout]).finally(() => {
-    clearTimeout(timer)
-    return handle.close()
-  })
+  const done = Promise.race([settled, timeout])
+
+  // Shut down on our own schedule instead of through .finally() on `done`: the caller's
+  // promise has to settle the moment consent lands -- it is what the tool call reports --
+  // while the port outlives it by CLOSE_GRACE_MS. Attached once, here, so the server
+  // closes once however many places end up awaiting `done`.
+  done.then(
+    () => {
+      clearTimeout(timer)
+      const graceTimer = setTimeout(closeServer, opts.graceMs ?? CLOSE_GRACE_MS)
+      // Same reason as the deadline above: a pending close must not hold the process open.
+      if (typeof graceTimer.unref === 'function') graceTimer.unref()
+    },
+    () => {
+      // Timed out, or the tokens could not be stored: nobody is mid-consent, so there is
+      // no late tab worth keeping the port alive for.
+      clearTimeout(timer)
+      closeServer()
+    }
+  )
   return { url: `http://${handle.host}:${handle.port}/`, done }
 }
