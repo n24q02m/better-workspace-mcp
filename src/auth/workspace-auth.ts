@@ -12,6 +12,7 @@ export interface GoogleTokens {
 
 export class WorkspaceAuth {
   private store = new PerPluginStore(STORE_PLUGIN) // single-user stdio: sub=null → LocalFsBackend (~/.better-workspace-mcp/config.json)
+  private clientPromise: Promise<Auth.OAuth2Client> | null = null
 
   // scopes kept for parity with the upstream AuthManager(scopes) contract; not currently read
   // by the OAuth setup flow, which uses its own WORKSPACE_SCOPES (see oauth-setup.ts).
@@ -27,37 +28,50 @@ export class WorkspaceAuth {
       withExpiry.expiry_date = Date.now() + rawExpiresIn * 1000
     }
     await this.store.save(withExpiry as unknown as Record<string, unknown>)
+    this.clientPromise = null // Invalidate cache on new tokens
   }
 
   async clear(): Promise<void> {
     await this.store.clear()
+    this.clientPromise = null // Invalidate cache on clear
   }
 
   async getAuthenticatedClient(): Promise<Auth.OAuth2Client> {
-    const raw = (await this.store.load()) as GoogleTokens | null
-    if (!raw?.access_token) {
-      throw new Error(
-        'Google account not configured. Start the server once to complete the browser OAuth consent (see setup docs).'
-      )
-    }
-    const client = new google.auth.OAuth2({
-      clientId: process.env.GOOGLE_OAUTH_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET
-    })
-    client.setCredentials({
-      access_token: raw.access_token,
-      refresh_token: raw.refresh_token,
-      expiry_date: raw.expiry_date,
-      scope: raw.scope,
-      token_type: raw.token_type
-    })
-    // Persist auto-refreshed tokens so a fresh access_token survives restarts.
-    // Merge order matters: {...raw, ...t} keeps the stored refresh_token because
-    // google-auth-library's 'tokens' event omits refresh_token on a refresh grant
-    // (it's re-attached by the library AFTER this emit). Never flip to {...t, ...raw}.
-    client.on('tokens', (t) => {
-      void this.saveTokens({ ...raw, ...t } as GoogleTokens)
-    })
-    return client
+    if (this.clientPromise) return this.clientPromise
+
+    this.clientPromise = (async () => {
+      try {
+        const raw = (await this.store.load()) as GoogleTokens | null
+        if (!raw?.access_token) {
+          throw new Error(
+            'Google account not configured. Start the server once to complete the browser OAuth consent (see setup docs).'
+          )
+        }
+        const client = new google.auth.OAuth2({
+          clientId: process.env.GOOGLE_OAUTH_CLIENT_ID,
+          clientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET
+        })
+        client.setCredentials({
+          access_token: raw.access_token,
+          refresh_token: raw.refresh_token,
+          expiry_date: raw.expiry_date,
+          scope: raw.scope,
+          token_type: raw.token_type
+        })
+        // Persist auto-refreshed tokens so a fresh access_token survives restarts.
+        // Merge order matters: {...raw, ...t} keeps the stored refresh_token because
+        // google-auth-library's 'tokens' event omits refresh_token on a refresh grant
+        // (it's re-attached by the library AFTER this emit). Never flip to {...t, ...raw}.
+        client.on('tokens', (t) => {
+          void this.saveTokens({ ...raw, ...t } as GoogleTokens)
+        })
+        return client
+      } catch (err) {
+        this.clientPromise = null
+        throw err
+      }
+    })()
+
+    return this.clientPromise
   }
 }
