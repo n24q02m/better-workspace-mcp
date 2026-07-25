@@ -126,10 +126,20 @@ export function config(input: ConfigInput): Promise<ConfigResult> {
           // No temporary server and nothing to await: the callback route already
           // lives in this process at a fixed path, and the state in the URL
           // carries the caller's identity to it.
+          //
+          // makePrimary is NOT honoured here and is reported rather than
+          // dropped in silence -- a caller who asked for it must not walk away
+          // believing their default changed. Why it is unavailable: the request
+          // would have to ride the signed state through the browser and Google,
+          // where anyone who obtains it could promote their own account to this
+          // user's default (see add-account-remote.ts StatePayload).
           return textResult(
             JSON.stringify({
-              open: buildAddAccountUrl(sub, { makePrimary }),
-              next: 'Complete the Google consent in the browser, then call config(action="account_list") to confirm.'
+              open: buildAddAccountUrl(sub),
+              next: 'Complete the Google consent in the browser, then call config(action="account_list") to confirm.',
+              default_account: makePrimary
+                ? 'value="primary" is not available in remote mode and was ignored. Adding an account does not change your default; call config(action="account_set_default", account="<email>") once it appears in account_list.'
+                : 'Adding an account does not change your default. Call config(action="account_set_default", account="<email>") to change it. (If you had no accounts at all, the first one becomes the default.)'
             })
           )
         }

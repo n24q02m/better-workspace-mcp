@@ -52,9 +52,14 @@ describe('state token', () => {
     expect(verifyState(signState('sub-1'))?.sub).toBe('sub-1')
   })
 
-  it('carries the signed makePrimary flag', () => {
-    expect(verifyState(signState('sub-1', { makePrimary: true }))?.mp).toBe(true)
-    expect(verifyState(signState('sub-1'))?.mp).toBeUndefined()
+  // The state must not be able to grant the default-account slot, because
+  // whoever gets hold of it -- by replay or by racing the real user -- would
+  // otherwise point every untargeted tool call at their own mailbox.
+  it('never carries a make-primary flag, whatever the caller passes', () => {
+    const state = signState('sub-1', { makePrimary: true } as never)
+    const claims = JSON.parse(Buffer.from(state.split('.')[0]!, 'base64url').toString('utf8'))
+    expect(claims).not.toHaveProperty('mp')
+    expect(Object.keys(claims).sort()).toEqual(['exp', 'n', 'sub'])
   })
 
   it('rejects a tampered payload', () => {
@@ -260,12 +265,14 @@ describe('callback success path', () => {
     expect(seenSubjects).toEqual(['sub-from-jwt'])
   })
 
-  it('passes the signed makePrimary flag through to the store', async () => {
-    await handleAccountCallback(
-      get(`/accounts/callback?code=abc&state=${signState('s', { makePrimary: true })}`),
-      fakeRes() as never
-    )
-    expect(saveTokens).toHaveBeenCalledWith(expect.anything(), { makePrimary: true })
+  it('never asks the store to promote the new account', async () => {
+    await handleAccountCallback(get(`/accounts/callback?code=abc&state=${signState('s')}`), fakeRes() as never)
+    // Called with the tokens alone: no options object, so no makePrimary to
+    // honour. AccountStore still promotes into an EMPTY bucket on its own --
+    // that is its invariant (a bucket of accounts with no working primary is
+    // broken), not something this flow can be asked to grant.
+    expect(saveTokens).toHaveBeenCalledWith(expect.anything())
+    expect(saveTokens.mock.calls[0]).toHaveLength(1)
   })
 
   it('sends the same redirect_uri to the token endpoint that it sent to authorize', async () => {
@@ -343,20 +350,24 @@ describe('callback success path', () => {
     expect(saveTokens).toHaveBeenCalledTimes(1)
   })
 
-  // The severity case: a replayed make-primary state would hand the replayer's
-  // own Google account the victim's DEFAULT account slot, so every later tool
-  // call without an explicit `account=` would run against the attacker's Drive,
-  // Gmail and Docs.
-  it('refuses a replayed make-primary state, so primary cannot be hijacked', async () => {
-    const state = signState('victim', { makePrimary: true })
+  it('refuses a replayed state and stores nothing on the replay', async () => {
+    const state = signState('victim')
     await handleAccountCallback(get(`/accounts/callback?code=a&state=${state}`), fakeRes() as never)
-    expect(saveTokens).toHaveBeenCalledWith(expect.anything(), { makePrimary: true })
+    expect(saveTokens).toHaveBeenCalledTimes(1)
 
     saveTokens.mockClear()
     const replay = fakeRes()
     await handleAccountCallback(get(`/accounts/callback?code=attacker&state=${state}`), replay as never)
     expect(replay.status).toBe(400)
     expect(saveTokens).not.toHaveBeenCalled()
+  })
+
+  // Belt to the single-use braces: even on the ordering single-use cannot stop
+  // (a stolen state used BEFORE the real user's own callback), the most the
+  // holder gets is an extra account -- never the default slot.
+  it('cannot promote an account even when the state is used first by someone else', async () => {
+    await handleAccountCallback(get(`/accounts/callback?code=stolen&state=${signState('victim')}`), fakeRes() as never)
+    expect(saveTokens.mock.calls[0]).toHaveLength(1)
   })
 
   // A replay must be indistinguishable from a link that was never valid --

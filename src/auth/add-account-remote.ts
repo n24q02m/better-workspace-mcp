@@ -53,13 +53,26 @@ export const STATE_TTL_MS = 10 * 60 * 1000
  */
 const STATE_HKDF_INFO = 'better-workspace/add-account-state/v1'
 
+/**
+ * There is deliberately NO make-primary flag here.
+ *
+ * Signing one would have been safe from tampering but not from use: whoever
+ * presents the state -- by replaying it, or simply by racing the real user to it
+ * -- would promote THEIR Google account to the caller's default, and every later
+ * tool call that omits `account=` (the path most calls take) would run against
+ * the attacker's Drive, Gmail and Docs. Single-use narrows that but cannot close
+ * the racing case (see `claimNonce`), so the privilege itself was removed from
+ * the browser round-trip instead. Changing the default is `account_set_default`,
+ * which travels inside an authenticated MCP call and never leaves the session.
+ *
+ * stdio keeps its `makePrimary`: nothing there crosses a URL, there is no `sub`
+ * to impersonate, and it is one user on their own machine.
+ */
 interface StatePayload {
   /** JWT sub of the user adding an account. */
   sub: string
   /** Absolute expiry, ms since epoch. */
   exp: number
-  /** Whether the new account should become primary. Signed so it cannot be flipped. */
-  mp?: boolean
   /** Makes each state unique so two flows started in the same millisecond differ. */
   n: string
 }
@@ -79,13 +92,12 @@ function sign(body: string): string {
   return createHmac('sha256', stateKey()).update(body).digest('base64url')
 }
 
-export function signState(sub: string, opts: { makePrimary?: boolean; now?: number } = {}): string {
+export function signState(sub: string, opts: { now?: number } = {}): string {
   const payload: StatePayload = {
     sub,
     exp: (opts.now ?? Date.now()) + STATE_TTL_MS,
     n: randomBytes(9).toString('base64url')
   }
-  if (opts.makePrimary) payload.mp = true
   const body = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url')
   return `${body}.${sign(body)}`
 }
@@ -221,8 +233,13 @@ export function resetNonceStoreForTesting(): void {
  * Durable Object storage is strongly consistent and would close (1). It is
  * deliberately not used: it needs a second DO class, binding and migration, and
  * it would tighten a seconds-wide window while leaving (2) -- the likelier
- * ordering -- exactly as it is. The cheaper lever on actual harm is not to put
- * a privilege change (`mp`) into a token that travels through a browser at all.
+ * ordering -- exactly as it is.
+ *
+ * The lever actually pulled on harm was the other one: no make-primary flag
+ * travels in the state at all (see `StatePayload`), so whoever uses a stolen
+ * state -- by either ordering -- can at most add an account to the bucket, not
+ * take over the default that untargeted tool calls run against. This barrier
+ * still earns its place on top of that, mostly for the detection in (2).
  */
 export async function claimNonce(nonce: string, exp: number, now: number = Date.now()): Promise<boolean> {
   const kv = nonceKv()
@@ -253,7 +270,7 @@ function redirectUri(): string {
  *
  * Not async: everything here is local. Callers may still `await` it.
  */
-export function buildAddAccountUrl(sub: string, opts: { makePrimary?: boolean } = {}): string {
+export function buildAddAccountUrl(sub: string): string {
   const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID
   if (!clientId) {
     throw new Error('GOOGLE_OAUTH_CLIENT_ID is required to add an account.')
@@ -269,7 +286,7 @@ export function buildAddAccountUrl(sub: string, opts: { makePrimary?: boolean } 
   // with no refresh_token dies at the first expiry.
   url.searchParams.set('access_type', 'offline')
   url.searchParams.set('prompt', 'consent')
-  url.searchParams.set('state', signState(sub, opts))
+  url.searchParams.set('state', signState(sub))
   return url.toString()
 }
 
@@ -418,7 +435,11 @@ export async function handleAccountCallback(req: IncomingMessage, res: ServerRes
       // getAuth() reads the subject context, so the write MUST happen inside
       // this scope -- outside it the account would land in the stdio bucket.
       runWithSubject(payload.sub, async () => {
-        const stored = await getAuth().saveTokens(tokens, { makePrimary: payload.mp })
+        // No makePrimary -- see StatePayload. AccountStore still promotes an
+        // account entering an EMPTY bucket, because a bucket holding accounts
+        // with no working primary would be broken; that is the store's
+        // invariant, not a privilege this flow can be asked to grant.
+        const stored = await getAuth().saveTokens(tokens)
         // This bucket now definitely has an account; refresh its own state so the
         // caller's next domain tool call is not gated on a stale 'awaiting_setup'.
         await resolveCredentialState()
