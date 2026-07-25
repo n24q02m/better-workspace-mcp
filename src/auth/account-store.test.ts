@@ -255,4 +255,58 @@ describe('AccountStore', () => {
       expect((await store.get('adopted@example.com'))?.record.refresh_token).toBe('legacy-rt')
     })
   })
+
+  describe('per-subject keying', () => {
+    // Bucket theo sub cần CREDENTIAL_SECRET: PerPluginStore derive khoá mã hoá
+    // qua `deriveMultiUserKey` (per-plugin-store.ts:85) và NÉM khi thiếu biến
+    // đó, khác hẳn nhánh sub=null vốn tự sinh khoá máy trên đĩa. Đặt ở đây chứ
+    // không ở beforeEach ngoài, để những test stdio phía trên vẫn chạy đúng cái
+    // môi trường chúng vẫn chạy.
+    const originalSecret = process.env.CREDENTIAL_SECRET
+
+    beforeEach(() => {
+      process.env.CREDENTIAL_SECRET = 'test-credential-secret-at-least-32-chars'
+    })
+    afterEach(() => {
+      if (originalSecret === undefined) delete process.env.CREDENTIAL_SECRET
+      else process.env.CREDENTIAL_SECRET = originalSecret
+    })
+
+    it('keeps two subjects in separate credential buckets', async () => {
+      const alice = new AccountStore('sub-alice')
+      const bob = new AccountStore('sub-bob')
+
+      await alice.put('shared@example.com', { ...REC, access_token: 'alice-token' })
+      await bob.put('shared@example.com', { ...REC, access_token: 'bob-token' })
+
+      expect((await alice.get('shared@example.com'))?.record.access_token).toBe('alice-token')
+      expect((await bob.get('shared@example.com'))?.record.access_token).toBe('bob-token')
+    })
+
+    it('does not let one subject see another subject accounts', async () => {
+      const alice = new AccountStore('sub-alice')
+      const bob = new AccountStore('sub-bob')
+
+      await alice.put('only-alice@example.com', REC)
+
+      expect((await bob.list()).accounts).toEqual([])
+      expect(await bob.get('only-alice@example.com')).toBeNull()
+    })
+
+    it('defaults to the single-user bucket when no sub is given (stdio behavior unchanged)', async () => {
+      const stdio = new AccountStore()
+      await stdio.put('local@example.com', REC)
+      expect((await new AccountStore().list()).accounts).toEqual(['local@example.com'])
+      // và bucket đó KHÔNG lẫn với bucket của một sub
+      expect((await new AccountStore('sub-x').list()).accounts).toEqual([])
+    })
+
+    it('rejects a sub that would escape the per-subject directory', async () => {
+      // credPath() của mcp-core validate sub (per-plugin-store.ts:34-40) và ném
+      // ngay trong constructor. Ghi lại ở đây vì `getAuth()` dựng AccountStore từ
+      // một giá trị lấy từ JWT: đường ném đó là đường bảo vệ, không phải tai nạn.
+      expect(() => new AccountStore('../escape')).toThrow(/Invalid sub/i)
+      expect(() => new AccountStore('has/slash')).toThrow(/Invalid sub/i)
+    })
+  })
 })

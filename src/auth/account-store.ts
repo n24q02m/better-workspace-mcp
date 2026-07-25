@@ -52,7 +52,24 @@ export const UNIDENTIFIED_ACCOUNT = '(unidentified)'
 const normalize = (email: string) => email.trim().toLowerCase()
 
 export class AccountStore {
-  private store = new PerPluginStore(STORE_PLUGIN)
+  private store: PerPluginStore
+
+  /**
+   * `sub` = JWT subject của người dùng (chế độ HTTP multi-user). Không truyền =
+   * `null` = một bucket duy nhất, đúng cho stdio single-user.
+   *
+   * PerPluginStore đổi credKey theo sub: `better-workspace/subs/<sub>/config` so
+   * với `better-workspace/config` (per-plugin-store.ts:80), và khoá mã hoá cũng
+   * derive theo sub (`deriveMultiUserKey` vs `loadOrGenMachineKey`, :85). Nên hai
+   * sub khác nhau không đọc được blob của nhau kể cả khi chạm được cùng backend.
+   *
+   * Nhánh sub cần env `CREDENTIAL_SECRET`; thiếu nó thì lần đọc/ghi đầu tiên ném.
+   * Một `sub` chứa ký tự ngoài `[a-zA-Z0-9._-]` bị `credPath()` từ chối NGAY trong
+   * constructor này -- đó là hàng rào chặn path traversal, giữ nguyên đừng bọc lại.
+   */
+  constructor(sub: string | null = null) {
+    this.store = new PerPluginStore(STORE_PLUGIN, sub)
+  }
 
   /**
    * Trả blob v2. Nếu trên đĩa còn là blob phẳng M1 thì tự migrate KHI suy ra
