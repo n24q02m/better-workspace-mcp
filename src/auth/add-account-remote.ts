@@ -19,6 +19,8 @@
 import { createHmac, hkdfSync, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { HttpRoute } from '@n24q02m/mcp-core'
+import { type SessionKv, wrapKvBackendAsSessionKv } from '@n24q02m/mcp-core/auth'
+import { backendFromEnv } from '@n24q02m/mcp-core/storage'
 import { GOOGLE_AUTHORIZE_URL, GOOGLE_TOKEN_URL, SERVER_NAME } from '../constants.js'
 import { getAuth, resolveCredentialState } from './credential-state.js'
 import { WORKSPACE_SCOPES } from './oauth-setup.js'
@@ -96,11 +98,8 @@ export function signState(sub: string, opts: { makePrimary?: boolean; now?: numb
  * caller renders one 400 for all of them, so a probing client cannot tell a bad
  * signature from an expired one.
  *
- * Known residual: a state is replayable until it expires. Making it single-use
- * needs server-side state that survives a cold start (KV), which this flow
- * otherwise does not need at all. The exposure is narrow -- an attacker also has
- * to complete a Google consent of their own within the window, and what they
- * achieve is attaching THEIR account to the victim's bucket, not reading it.
+ * A valid signature is NOT sufficient on its own -- the callback additionally
+ * claims the nonce so a state can be used once. See `claimNonce`.
  */
 export function verifyState(state: string, now: number = Date.now()): StatePayload | null {
   const dot = state.indexOf('.')
@@ -122,6 +121,92 @@ export function verifyState(state: string, now: number = Date.now()): StatePaylo
   } catch {
     return null
   }
+}
+
+/**
+ * KV namespace for spent state nonces.
+ *
+ * MUST stay under the `better-workspace/` prefix that `src/worker.ts` allowlists
+ * on the container's `kv.internal` outbound handler -- a key outside it is
+ * rejected with a 403 that surfaces nowhere.
+ */
+const NONCE_KV_PREFIX = 'better-workspace/add-account-nonce:'
+
+/**
+ * In-process fallback used when there is no durable KV (http mode outside the
+ * cf-kv deploy), mirroring what mcp-core's own session store does in that case.
+ * Single-use is then only guaranteed WITHIN one process -- which is complete for
+ * a single-process deploy and would not be for a multi-replica one.
+ */
+const localNonces = new Map<string, number>()
+
+let cachedNonceKv: SessionKv | undefined
+let cachedNonceKvFor: string | undefined
+
+function nonceKv(): SessionKv {
+  const backendKind = (process.env.MCP_STORAGE_BACKEND ?? '').toLowerCase()
+  if (backendKind !== 'cf-kv') {
+    return {
+      get: async (key) => {
+        const exp = localNonces.get(key)
+        if (exp === undefined) return null
+        if (exp <= Date.now()) {
+          localNonces.delete(key)
+          return null
+        }
+        return String(exp)
+      },
+      put: async (key, value) => void localNonces.set(key, Number(value)),
+      delete: async (key) => void localNonces.delete(key)
+    }
+  }
+  // Rebuilt if the backend changes under us (tests), otherwise reused.
+  if (!cachedNonceKv || cachedNonceKvFor !== backendKind) {
+    cachedNonceKv = wrapKvBackendAsSessionKv(backendFromEnv(), NONCE_KV_PREFIX)
+    cachedNonceKvFor = backendKind
+  }
+  return cachedNonceKv
+}
+
+/** Test seam: drop the memoised KV and any in-process nonces. */
+export function resetNonceStoreForTesting(): void {
+  cachedNonceKv = undefined
+  cachedNonceKvFor = undefined
+  localNonces.clear()
+}
+
+/**
+ * Spend a state's nonce, returning false if it was already spent.
+ *
+ * Why single-use matters beyond "replay is untidy": a state carries the signed
+ * `mp` (make-primary) flag, so replaying one minted with `value="primary"` lets
+ * the replayer attach THEIR Google account as the victim's PRIMARY. Every later
+ * tool call the victim makes without an explicit `account=` -- the default path,
+ * the one most calls take -- would then run against the attacker's Drive, Gmail
+ * and Docs. The victim's existing data is not read, but everything they create
+ * from that point lands in someone else's account. That is a different severity
+ * from "an unwanted extra account appears in account_list".
+ *
+ * `SessionKv` has no TTL and no compare-and-set, so expiry is stored in the
+ * value and the read-then-write is made atomic by the caller: this runs inside
+ * `serializeBySubject`, and a replay is BY DEFINITION the same state and
+ * therefore the same subject, so it queues behind the original rather than
+ * racing it.
+ *
+ * A KV failure propagates instead of being swallowed. Failing open here would
+ * restore exactly the replay window this exists to close, and add-account is a
+ * rare, retryable operation -- refusing it during a KV outage is the cheap side
+ * of that trade.
+ */
+export async function claimNonce(nonce: string, exp: number, now: number = Date.now()): Promise<boolean> {
+  const kv = nonceKv()
+  const seen = await kv.get(nonce)
+  // A spent marker past its own expiry is indistinguishable from absent: the
+  // state it belonged to is dead anyway, so the entry is free to be overwritten
+  // rather than accumulating forever in a store with no TTL of its own.
+  if (seen !== null && Number(seen) > now) return false
+  await kv.put(nonce, String(exp))
+  return true
 }
 
 function redirectUri(): string {
@@ -273,6 +358,34 @@ export async function handleAccountCallback(req: IncomingMessage, res: ServerRes
     return
   }
 
+  // Spend the state. Inside the per-subject queue so the read-then-write is
+  // atomic against a concurrent replay (same state => same subject => queued).
+  // A replay gets the SAME 400 as an unrecognised link: telling a caller that
+  // their link was "already used" confirms they hold a real one.
+  let claimed: boolean
+  try {
+    claimed = await serializeBySubject(payload.sub, () => claimNonce(payload.n, payload.exp))
+  } catch (err) {
+    // KV unreachable. Fail closed -- see claimNonce.
+    console.error(`[${SERVER_NAME}] could not check the add-account link:`, err)
+    respond(
+      res,
+      503,
+      'Could not verify the link',
+      'The server could not reach its state store, so it refused the request rather than risk accepting a reused link. Try again shortly.'
+    )
+    return
+  }
+  if (!claimed) {
+    respond(
+      res,
+      400,
+      'Link expired or not recognised',
+      'Start again with config(action="account_add") and open the fresh link. A link is only valid for a few minutes.'
+    )
+    return
+  }
+
   try {
     const tokens = await exchangeCode(code)
     const email = await serializeBySubject(payload.sub, () =>
@@ -290,7 +403,12 @@ export async function handleAccountCallback(req: IncomingMessage, res: ServerRes
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error(`[${SERVER_NAME}] add-account callback failed:`, message)
-    respond(res, 500, 'Could not add the account', message)
+    // The nonce stays spent even though nothing was stored. Releasing it would
+    // let the same state be presented again with a DIFFERENT Google code, which
+    // is the replay this just blocked. Google's own code is single-use anyway,
+    // so the link was dead the moment it was submitted -- a fresh one is the
+    // only correct recovery, and the message says so.
+    respond(res, 500, 'Could not add the account', `${message} Start again with config(action="account_add").`)
   }
 }
 

@@ -3,7 +3,9 @@ import {
   ACCOUNT_CALLBACK_PATH,
   accountCallbackRoute,
   buildAddAccountUrl,
+  claimNonce,
   handleAccountCallback,
+  resetNonceStoreForTesting,
   STATE_TTL_MS,
   signState,
   verifyState
@@ -35,7 +37,10 @@ function get(path: string) {
   return { url: path, headers: {} } as never
 }
 
-beforeEach(setEnv)
+beforeEach(() => {
+  setEnv()
+  resetNonceStoreForTesting()
+})
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -208,6 +213,24 @@ describe('callback gate', () => {
   })
 })
 
+describe('nonce claim (single-use state)', () => {
+  it('claims a fresh nonce once and refuses it after', async () => {
+    expect(await claimNonce('n1', Date.now() + 60_000)).toBe(true)
+    expect(await claimNonce('n1', Date.now() + 60_000)).toBe(false)
+  })
+
+  it('lets an expired spent marker be reclaimed (the state it belonged to is dead anyway)', async () => {
+    const exp = Date.now() + 60_000
+    expect(await claimNonce('n2', exp)).toBe(true)
+    expect(await claimNonce('n2', exp, exp + 1)).toBe(true)
+  })
+
+  it('keeps separate nonces independent', async () => {
+    expect(await claimNonce('a', Date.now() + 60_000)).toBe(true)
+    expect(await claimNonce('b', Date.now() + 60_000)).toBe(true)
+  })
+})
+
 describe('callback success path', () => {
   const saveTokens = vi.fn(async () => 'added@example.com')
   const seenSubjects: (string | undefined)[] = []
@@ -285,10 +308,12 @@ describe('callback success path', () => {
       inFlight -= 1
       return 'added@example.com'
     })
-    const state = signState('same-sub')
+    // TWO SEPARATE flows for one user (two account_add calls). The same state
+    // twice is the replay case and is covered below -- it is refused, so it
+    // could not exercise the write queue.
     await Promise.all([
-      handleAccountCallback(get(`/accounts/callback?code=a&state=${state}`), fakeRes() as never),
-      handleAccountCallback(get(`/accounts/callback?code=b&state=${state}`), fakeRes() as never)
+      handleAccountCallback(get(`/accounts/callback?code=a&state=${signState('same-sub')}`), fakeRes() as never),
+      handleAccountCallback(get(`/accounts/callback?code=b&state=${signState('same-sub')}`), fakeRes() as never)
     ])
     expect(overlapped).toBe(false)
     expect(saveTokens).toHaveBeenCalledTimes(2)
@@ -304,6 +329,93 @@ describe('callback success path', () => {
       handleAccountCallback(get(`/accounts/callback?code=b&state=${signState('bob')}`), fakeRes() as never)
     ])
     expect(seenSubjects.slice().sort()).toEqual(['alice', 'bob'])
+  })
+
+  it('refuses a replayed state and stores nothing the second time', async () => {
+    const state = signState('sub-1')
+    const first = fakeRes()
+    await handleAccountCallback(get(`/accounts/callback?code=a&state=${state}`), first as never)
+    expect(first.status).toBe(200)
+
+    const replay = fakeRes()
+    await handleAccountCallback(get(`/accounts/callback?code=b&state=${state}`), replay as never)
+    expect(replay.status).toBe(400)
+    expect(saveTokens).toHaveBeenCalledTimes(1)
+  })
+
+  // The severity case: a replayed make-primary state would hand the replayer's
+  // own Google account the victim's DEFAULT account slot, so every later tool
+  // call without an explicit `account=` would run against the attacker's Drive,
+  // Gmail and Docs.
+  it('refuses a replayed make-primary state, so primary cannot be hijacked', async () => {
+    const state = signState('victim', { makePrimary: true })
+    await handleAccountCallback(get(`/accounts/callback?code=a&state=${state}`), fakeRes() as never)
+    expect(saveTokens).toHaveBeenCalledWith(expect.anything(), { makePrimary: true })
+
+    saveTokens.mockClear()
+    const replay = fakeRes()
+    await handleAccountCallback(get(`/accounts/callback?code=attacker&state=${state}`), replay as never)
+    expect(replay.status).toBe(400)
+    expect(saveTokens).not.toHaveBeenCalled()
+  })
+
+  // A replay must be indistinguishable from a link that was never valid --
+  // "already used" would confirm to a prober that they hold a real one.
+  it('answers a replay with the same 400 as an unrecognised link', async () => {
+    const state = signState('sub-1')
+    await handleAccountCallback(get(`/accounts/callback?code=a&state=${state}`), fakeRes() as never)
+
+    const replay = fakeRes()
+    await handleAccountCallback(get(`/accounts/callback?code=b&state=${state}`), replay as never)
+    const unknown = fakeRes()
+    await handleAccountCallback(get('/accounts/callback?code=b&state=garbage'), unknown as never)
+
+    expect(replay.status).toBe(unknown.status)
+    expect(replay.body).toBe(unknown.body)
+  })
+
+  it('does not spend the nonce before Google has actually granted anything', async () => {
+    // A denied consent must leave the link usable, or a user who clicks "cancel"
+    // by mistake is locked out of the flow they just started.
+    const state = signState('sub-1')
+    await handleAccountCallback(get(`/accounts/callback?error=access_denied&state=${state}`), fakeRes() as never)
+    const retry = fakeRes()
+    await handleAccountCallback(get(`/accounts/callback?code=a&state=${state}`), retry as never)
+    expect(retry.status).toBe(200)
+  })
+
+  // Abandoning a flow and starting a new one is ordinary: the old state stays
+  // valid until it expires, and each carries its own nonce, so both complete.
+  it('lets an abandoned flow and its restart both complete independently', async () => {
+    const abandoned = signState('sub-1')
+    const restarted = signState('sub-1')
+    const a = fakeRes()
+    const b = fakeRes()
+    await handleAccountCallback(get(`/accounts/callback?code=x&state=${restarted}`), a as never)
+    await handleAccountCallback(get(`/accounts/callback?code=y&state=${abandoned}`), b as never)
+    expect([a.status, b.status]).toEqual([200, 200])
+  })
+
+  it('fails closed with 503 when the nonce store is unreachable', async () => {
+    process.env.MCP_STORAGE_BACKEND = 'cf-kv'
+    process.env.MCP_KV_BASE_URL = 'http://kv.internal'
+    resetNonceStoreForTesting()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('kv unreachable')
+      })
+    )
+    try {
+      const res = fakeRes()
+      await handleAccountCallback(get(`/accounts/callback?code=a&state=${signState('sub-1')}`), res as never)
+      expect(res.status).toBe(503)
+      expect(saveTokens).not.toHaveBeenCalled()
+    } finally {
+      delete process.env.MCP_STORAGE_BACKEND
+      delete process.env.MCP_KV_BASE_URL
+      resetNonceStoreForTesting()
+    }
   })
 
   // A failed write must not wedge the per-subject queue for that user forever.
