@@ -45,6 +45,17 @@ describe('deriveSubject', () => {
   })
 })
 
+describe('WORKSPACE_SCOPES', () => {
+  it('requests the Forms scopes up front so M4 needs no second consent', () => {
+    expect(WORKSPACE_SCOPES).toContain('https://www.googleapis.com/auth/forms.body')
+    expect(WORKSPACE_SCOPES).toContain('https://www.googleapis.com/auth/forms.responses.readonly')
+  })
+
+  it('does not request forms.body.readonly, which forms.body already covers', () => {
+    expect(WORKSPACE_SCOPES).not.toContain('https://www.googleapis.com/auth/forms.body.readonly')
+  })
+})
+
 describe('runOAuthSetup', () => {
   beforeEach(() => {
     vi.clearAllMocks()
