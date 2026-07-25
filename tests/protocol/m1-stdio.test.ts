@@ -57,12 +57,25 @@ describe('M1 stdio protocol E2E', () => {
     try {
       // Structurally-valid fake token: enough fields for WorkspaceAuth.getAuthenticatedClient()
       // to consider the account 'configured' without ever hitting the network.
+      //
+      // Must be the v2 multi-account blob, not M2's flat predecessor. A flat blob
+      // carries no email, so getAuthenticatedClient() would take the legacy-adoption
+      // path and ask Google userinfo who owns the token -- a real network call, with
+      // this fake token, whose failure leaves the server 'awaiting_setup' and makes it
+      // start the browser OAuth server instead of stdio (the client then never
+      // connects). Seed the current on-disk shape and the test stays hermetic.
       await new PerPluginStore(STORE_PLUGIN).save({
-        access_token: 'fake-access-token',
-        refresh_token: 'fake-refresh-token',
-        expiry_date: Date.now() + 3600_000,
-        scope: 'openid email profile',
-        token_type: 'Bearer'
+        version: 2,
+        accounts: {
+          'seed@example.com': {
+            access_token: 'fake-access-token',
+            refresh_token: 'fake-refresh-token',
+            expiry_date: Date.now() + 3600_000,
+            scope: 'openid email profile',
+            token_type: 'Bearer'
+          }
+        },
+        primary: 'seed@example.com'
       })
     } finally {
       setHomeDirForTesting(null) // seeding done; the child gets its own home via env below

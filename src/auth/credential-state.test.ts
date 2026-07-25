@@ -23,7 +23,10 @@ describe('credential-state', () => {
   it('starts as awaiting_setup, resolves to configured after saveTokens, back to awaiting_setup after resetState', async () => {
     expect(getState()).toBe('awaiting_setup')
 
-    await getAuth().saveTokens({ access_token: 'at', refresh_token: 'rt', expiry_date: Date.now() + 3600_000 })
+    await getAuth().saveTokens(
+      { access_token: 'at', refresh_token: 'rt', expiry_date: Date.now() + 3600_000 },
+      { email: 'one@example.com' }
+    )
     expect(await resolveCredentialState()).toBe('configured')
     expect(getState()).toBe('configured')
 

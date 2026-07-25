@@ -74,6 +74,31 @@ export class AccountStore {
     return isLegacyBlob(raw) ? (raw as unknown as AccountRecord) : null
   }
 
+  /**
+   * Nhận blob phẳng M1 về dưới tên `email` -- cửa ra hợp lệ duy nhất của guard
+   * trong `put()`. Tách hẳn khỏi `put()` vì hai ý định khác nhau: `put` là
+   * "thêm một account MỚI" (và phải từ chối khi làm vậy sẽ đè mất blob cũ),
+   * còn đây là "blob cũ đó CHÍNH LÀ account này, ghi lại đúng chỗ".
+   *
+   * Ghi trong MỘT lần `save()`, không `clear()` rồi `save()`: một cú crash
+   * giữa hai bước sẽ xoá sạch refresh_token mà người dùng không lấy lại được
+   * mà không OAuth lại.
+   *
+   * Trả về record đã nhận, hoặc null nếu trên đĩa không (còn) là blob phẳng --
+   * nhờ đó gọi lại lần hai là no-op thay vì làm hỏng blob v2 đang có.
+   */
+  async adoptLegacy(email: string): Promise<AccountRecord | null> {
+    const legacy = await this.loadLegacy()
+    if (!legacy) return null
+    const key = normalize(email)
+    await this.store.save({
+      version: 2,
+      accounts: { [key]: legacy },
+      primary: key
+    } as unknown as Record<string, unknown>)
+    return legacy
+  }
+
   async put(email: string, record: AccountRecord, opts: { makePrimary?: boolean } = {}): Promise<void> {
     const key = normalize(email)
     const existing = await this.load()

@@ -143,4 +143,45 @@ describe('AccountStore', () => {
     expect((await store.loadLegacy())?.access_token).toBe('legacy-at')
     expect((await store.loadLegacy())?.refresh_token).toBe('legacy-rt')
   })
+
+  describe('adoptLegacy', () => {
+    it('turns the flat blob into a v2 blob under the given email, keeping its tokens', async () => {
+      await new PerPluginStore(STORE_PLUGIN).save({ access_token: 'legacy-at', refresh_token: 'legacy-rt' })
+      const store = new AccountStore()
+
+      expect(await store.adoptLegacy('Adopted@Example.com')).toMatchObject({ access_token: 'legacy-at' })
+
+      expect(await store.load()).toEqual({
+        version: 2,
+        accounts: {
+          'adopted@example.com': expect.objectContaining({ access_token: 'legacy-at', refresh_token: 'legacy-rt' })
+        },
+        primary: 'adopted@example.com'
+      })
+      expect(isLegacyBlob(await new PerPluginStore(STORE_PLUGIN).load())).toBe(false)
+      expect(await store.loadLegacy()).toBeNull()
+    })
+
+    it('unblocks put() -- the guard only fires while the legacy blob is unadopted', async () => {
+      await new PerPluginStore(STORE_PLUGIN).save({ access_token: 'legacy-at', refresh_token: 'legacy-rt' })
+      const store = new AccountStore()
+
+      await store.adoptLegacy('adopted@example.com')
+      await store.put('new@example.com', REC)
+
+      expect((await store.list()).accounts).toEqual(['adopted@example.com', 'new@example.com'])
+      // adoption giữ ngôi primary, thêm account mới không cướp nó
+      expect((await store.list()).primary).toBe('adopted@example.com')
+    })
+
+    it('returns null when there is no flat blob to adopt', async () => {
+      const store = new AccountStore()
+      expect(await store.adoptLegacy('nobody@example.com')).toBeNull()
+
+      await store.put('one@example.com', REC)
+      expect(await store.adoptLegacy('one@example.com')).toBeNull()
+      // blob v2 đang có không bị adoptLegacy làm hỏng
+      expect((await store.list()).accounts).toEqual(['one@example.com'])
+    })
+  })
 })
