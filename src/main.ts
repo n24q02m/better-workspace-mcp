@@ -5,7 +5,8 @@
  *   - "stdio" (default): Local mode. One-shot Google OAuth setup on first run
  *     (mcp-core delegated redirect flow, offline access -> refresh_token),
  *     then MCP SDK StdioServerTransport directly (no daemon proxy hop).
- *   - "http": Milestone 3 (not yet implemented).
+ *   - "http": Remote mode. OAuth 2.1 delegated tới Google qua mcp-core, mỗi
+ *     người dùng một bucket credential theo JWT sub (src/transports/http.ts).
  */
 
 import { readFileSync, realpathSync } from 'node:fs'
@@ -71,7 +72,11 @@ export async function startServer(mode: string): Promise<void> {
   process.env.BETTER_WORKSPACE_MCP_BOOTSTRAPPED = 'true'
 
   if (mode === 'http') {
-    throw new Error('http mode is Milestone 3 (not yet implemented)')
+    // Không chạy nhánh OAuth của stdio dưới đây: container không có browser, và
+    // ở remote thì mỗi người dùng tự consent qua /authorize của chính server.
+    const { startHttp } = await import('./transports/http.js')
+    await startHttp()
+    return
   }
 
   // Stdio mode: no static token env var (unlike notion's NOTION_TOKEN) --
