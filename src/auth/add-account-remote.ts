@@ -99,7 +99,8 @@ export function signState(sub: string, opts: { makePrimary?: boolean; now?: numb
  * signature from an expired one.
  *
  * A valid signature is NOT sufficient on its own -- the callback additionally
- * claims the nonce so a state can be used once. See `claimNonce`.
+ * claims the nonce, which makes a state single-use under the consistency limits
+ * spelled out on `claimNonce`. Read those before treating it as a hard lock.
  */
 export function verifyState(state: string, now: number = Date.now()): StatePayload | null {
   const dot = state.indexOf('.')
@@ -191,12 +192,37 @@ export function resetNonceStoreForTesting(): void {
  * value and the read-then-write is made atomic by the caller: this runs inside
  * `serializeBySubject`, and a replay is BY DEFINITION the same state and
  * therefore the same subject, so it queues behind the original rather than
- * racing it.
+ * racing it. That holds within ONE process and is exactly as strong as that
+ * assumption -- see the note on the in-process fallback above.
  *
  * A KV failure propagates instead of being swallowed. Failing open here would
  * restore exactly the replay window this exists to close, and add-account is a
  * rare, retryable operation -- refusing it during a KV outage is the cheap side
  * of that trade.
+ *
+ * THIS IS A BARRIER, NOT A LOCK. Do not read more into it than it gives:
+ *
+ * 1. Cloudflare KV is eventually consistent. Its own docs say a write is
+ *    "usually immediately visible" at the location that made it, then add:
+ *    "However, this is not guaranteed and therefore it is not advised to rely
+ *    on this behaviour." Sharper for this exact pattern, KV caches NEGATIVE
+ *    lookups as well as positive ones -- so the `get` below is itself what
+ *    plants a "this key is missing" entry, and a replay arriving before that
+ *    entry times out can read the stale miss and pass. The practical window
+ *    shrinks from the state's full ten minutes to something usually sub-second,
+ *    which is a large improvement and still not a guarantee.
+ *
+ * 2. It does nothing about an attacker who presents a stolen state BEFORE the
+ *    legitimate user does. That is a race, not a replay, and no amount of
+ *    storage strength changes it. What single-use buys there is DETECTION: the
+ *    real user's own link then fails, so the theft surfaces instead of both
+ *    consents quietly succeeding.
+ *
+ * Durable Object storage is strongly consistent and would close (1). It is
+ * deliberately not used: it needs a second DO class, binding and migration, and
+ * it would tighten a seconds-wide window while leaving (2) -- the likelier
+ * ordering -- exactly as it is. The cheaper lever on actual harm is not to put
+ * a privilege change (`mp`) into a token that travels through a browser at all.
  */
 export async function claimNonce(nonce: string, exp: number, now: number = Date.now()): Promise<boolean> {
   const kv = nonceKv()
