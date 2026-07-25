@@ -7,7 +7,9 @@
 
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { startAddAccount } from '../auth/add-account.js'
+import { buildAddAccountUrl } from '../auth/add-account-remote.js'
 import { getAuth, getState, resetState, resolveCredentialState } from '../auth/credential-state.js'
+import { currentSubject } from '../auth/subject-context.js'
 import { WorkspaceMCPError, withErrorHandling } from './helpers/errors.js'
 
 export interface ConfigInput {
@@ -111,7 +113,28 @@ export function config(input: ConfigInput): Promise<ConfigResult> {
       }
 
       case 'account_add': {
-        const flow = await startAddAccount({ makePrimary: input.value === 'primary' })
+        const makePrimary = input.value === 'primary'
+
+        // A subject scope means an authenticated remote caller: `authScope` in
+        // transports/http.ts opens one per request from the Bearer JWT, and
+        // stdio never has one. That is the exact condition this branch needs --
+        // remote add-account has to know WHOSE bucket the account joins -- so it
+        // is a better signal than sniffing MCP_TRANSPORT, which describes how the
+        // process was started rather than whether this call carries an identity.
+        const sub = currentSubject()
+        if (sub !== undefined) {
+          // No temporary server and nothing to await: the callback route already
+          // lives in this process at a fixed path, and the state in the URL
+          // carries the caller's identity to it.
+          return textResult(
+            JSON.stringify({
+              open: buildAddAccountUrl(sub, { makePrimary }),
+              next: 'Complete the Google consent in the browser, then call config(action="account_list") to confirm.'
+            })
+          )
+        }
+
+        const flow = await startAddAccount({ makePrimary })
         // Deliberately not awaiting flow.done: the tool call has to return the URL
         // right away so the user can open it. The flow stores the account and closes
         // its temporary server on its own.

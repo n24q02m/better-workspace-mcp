@@ -67,6 +67,14 @@ export async function startAddAccount(
     () => new Server({ name: SERVER_NAME, version: '0.0.0' }, { capabilities: {} }) as unknown as McpServer,
     {
       serverName: SERVER_NAME,
+      // This function hands the URL back to the caller, which surfaces it in the
+      // tool result -- so mcp-core opening a tab of its own would be a SECOND
+      // entry point into the same temporary server, and the user would start two
+      // consent flows without knowing it. Note this removes one source of extra
+      // tabs, not the need for the grace window below: the user clicking the
+      // returned link twice, or reloading the finished page, still produces late
+      // redirects that must land somewhere alive (consent-server.ts).
+      openBrowser: false,
       delegatedOAuth: {
         flow: 'redirect',
         upstream: {

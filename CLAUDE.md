@@ -10,7 +10,7 @@ Trang thai: M2 multi-account COMPLETE (Task 9 smoke that voi 2 Google account da
 
 ## Modes
 
-stdio mode (mac dinh, single-user qua env credentials) la target M1-M2. HTTP/multi-user la M3. `account_add` chi chay duoc o stdio — xem Multi-account.
+stdio mode (mac dinh, single-user qua env credentials) la target M1-M2. HTTP/multi-user la M3. `account_add` chay duoc o CA HAI mode va tu chon duong di theo `currentSubject()`: co subject scope (= remote, `authScope` mo tu Bearer JWT) thi tra URL toi `/accounts/callback` co dinh; khong co (= stdio) thi dung server tam tren loopback. Xem Multi-account.
 
 ## Multi-account
 
@@ -42,4 +42,8 @@ bun run build       # tsc -build + scripts/build-cli.js -> bin/cli.mjs
 
 ## Dependency dac biet
 
-`@n24q02m/mcp-core` pin `1.20.0` (stable npm, co feature `authorizeParams` cho Google refresh_token qua delegated redirect + access_type=offline — dung o `src/auth/oauth-setup.ts`). `1.20.0` co `build/` byte-identical voi `1.20.0-beta.3` (beta nay = mcp-core main sau merge PR #669), nen bump beta -> stable khong doi API. Giu exact pin (khong caret) de moi lan doi mcp-core deu di qua mot Renovate PR + CI.
+`@n24q02m/mcp-core` pin `1.22.0-beta.1` (exact, khong caret — de moi lan doi mcp-core deu di qua mot Renovate PR + CI). Day la BETA co chu dich: `dist-tags.latest` van la `1.21.0`, nhung M3 can hai thu chi co tu `1.22.0-beta.1`:
+- `extraRoutes: HttpRoute[]` — duong DUY NHAT de consumer so huu mot endpoint trong process cua `runHttpServer`. `/mcp` + `/health` duoc thu TRUOC (khong shadow duoc), OAuth app la catch-all cho phan con lai, nen route dang ky o day nam giua. Dung cho `/accounts/callback`.
+- `openBrowser?: boolean` — tat tab tu-mo cua mcp-core khi consumer da tu dua URL cho nguoi dung. Dat `false` o `add-account.ts`. **KHONG** dat o `oauth-setup.ts`: do la duong setup lan dau, tat tab se giet trai nghiem cua nguoi khong doc stderr.
+
+Cai nay KHONG thay the grace window cua `consent-server.ts` — no bo mot NGUON tab (mcp-core), con tab muon do nguoi dung tu bam lai thi van can cho dap xuong.

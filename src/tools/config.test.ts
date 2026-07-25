@@ -207,6 +207,42 @@ describe('config', () => {
         vi.resetModules()
       }
     })
+
+    // Remote: a subject scope exists, so account_add must NOT stand up a local
+    // consent server -- it returns the fixed /accounts/callback URL carrying the
+    // caller's identity in a signed state.
+    it('account_add inside a subject scope uses the remote callback, not a local port', async () => {
+      process.env.CREDENTIAL_SECRET = 'test-secret-at-least-32-chars-long-xx'
+      process.env.PUBLIC_URL = 'https://workspace.example.com'
+      vi.resetModules()
+      let localFlowStarted = false
+      vi.doMock('../auth/add-account.js', () => ({
+        startAddAccount: async () => {
+          localFlowStarted = true
+          return { url: 'http://127.0.0.1:9999/', done: Promise.resolve('x@example.com') }
+        }
+      }))
+      try {
+        const { config: freshConfig } = await import('./config.js')
+        const { runWithSubject } = await import('../auth/subject-context.js')
+        const { verifyState } = await import('../auth/add-account-remote.js')
+
+        const body = await runWithSubject('sub-alice', async () =>
+          JSON.parse(textOf(await freshConfig({ action: 'account_add', value: 'primary' })))
+        )
+
+        expect(localFlowStarted).toBe(false)
+        const url = new URL((body as { open: string }).open)
+        expect(url.searchParams.get('redirect_uri')).toBe('https://workspace.example.com/accounts/callback')
+        // The bucket the account will join is the CALLER's, carried in the state.
+        const state = verifyState(url.searchParams.get('state') ?? '')
+        expect(state?.sub).toBe('sub-alice')
+        expect(state?.mp).toBe(true)
+      } finally {
+        vi.doUnmock('../auth/add-account.js')
+        vi.resetModules()
+      }
+    })
   })
 
   describe('invalid action', () => {

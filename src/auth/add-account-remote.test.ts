@@ -1,0 +1,320 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  ACCOUNT_CALLBACK_PATH,
+  accountCallbackRoute,
+  buildAddAccountUrl,
+  handleAccountCallback,
+  STATE_TTL_MS,
+  signState,
+  verifyState
+} from './add-account-remote.js'
+
+const SECRET = 'test-secret-at-least-32-chars-long-xx'
+
+function setEnv(): void {
+  process.env.CREDENTIAL_SECRET = SECRET
+  process.env.GOOGLE_OAUTH_CLIENT_ID = 'cid'
+  process.env.GOOGLE_OAUTH_CLIENT_SECRET = 'sec'
+  process.env.PUBLIC_URL = 'https://workspace.example.com'
+}
+
+function fakeRes() {
+  return {
+    writeHead: vi.fn(),
+    end: vi.fn(),
+    get status(): number {
+      return this.writeHead.mock.calls[0]?.[0] as number
+    },
+    get body(): string {
+      return (this.end.mock.calls[0]?.[0] as string) ?? ''
+    }
+  }
+}
+
+function get(path: string) {
+  return { url: path, headers: {} } as never
+}
+
+beforeEach(setEnv)
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
+
+describe('state token', () => {
+  it('round-trips the subject', () => {
+    expect(verifyState(signState('sub-1'))?.sub).toBe('sub-1')
+  })
+
+  it('carries the signed makePrimary flag', () => {
+    expect(verifyState(signState('sub-1', { makePrimary: true }))?.mp).toBe(true)
+    expect(verifyState(signState('sub-1'))?.mp).toBeUndefined()
+  })
+
+  it('rejects a tampered payload', () => {
+    const [body, mac] = signState('sub-1').split('.')
+    const forged = Buffer.from(JSON.stringify({ sub: 'attacker', exp: Date.now() + 60_000, n: 'x' }), 'utf8').toString(
+      'base64url'
+    )
+    expect(verifyState(`${forged}.${mac}`)).toBeNull()
+    // ...and the original still verifies, so the test is about the swap.
+    expect(verifyState(`${body}.${mac}`)?.sub).toBe('sub-1')
+  })
+
+  it('rejects a state signed with a different secret', () => {
+    const state = signState('sub-1')
+    process.env.CREDENTIAL_SECRET = 'a-completely-different-secret-value-yy'
+    expect(verifyState(state)).toBeNull()
+  })
+
+  it('rejects an expired state', () => {
+    const state = signState('sub-1')
+    expect(verifyState(state, Date.now() + STATE_TTL_MS + 1)).toBeNull()
+  })
+
+  it('rejects malformed input without throwing', () => {
+    for (const bad of ['', 'not-a-state', '.', 'a.b', '.abc']) {
+      expect(verifyState(bad)).toBeNull()
+    }
+  })
+
+  it('two flows for the same subject produce different states', () => {
+    expect(signState('sub-1')).not.toBe(signState('sub-1'))
+  })
+
+  // The whole reason this is an HMAC and not JWTIssuer.issueAccessToken(): a
+  // state travels in a URL, through browser history and Google's Referer, so it
+  // must not be a credential. A JWT would be `header.payload.signature`; this is
+  // two segments and carries no `typ`/`iss`/`aud`, so /mcp's verifier cannot
+  // accept it even if someone lifts it out of a log.
+  it('is not shaped like a JWT access token', () => {
+    const state = signState('sub-1')
+    expect(state.split('.')).toHaveLength(2)
+    const claims = JSON.parse(Buffer.from(state.split('.')[0]!, 'base64url').toString('utf8'))
+    expect(claims).not.toHaveProperty('typ')
+    expect(claims).not.toHaveProperty('iss')
+    expect(claims).not.toHaveProperty('aud')
+  })
+
+  it('refuses to sign without CREDENTIAL_SECRET', () => {
+    process.env.CREDENTIAL_SECRET = ''
+    expect(() => signState('sub-1')).toThrow(/CREDENTIAL_SECRET/)
+  })
+})
+
+describe('buildAddAccountUrl', () => {
+  it('targets Google with the registered redirect URI and offline params', () => {
+    const url = new URL(buildAddAccountUrl('sub-1'))
+    expect(url.origin + url.pathname).toBe('https://accounts.google.com/o/oauth2/v2/auth')
+    expect(url.searchParams.get('redirect_uri')).toBe('https://workspace.example.com/accounts/callback')
+    expect(url.searchParams.get('access_type')).toBe('offline')
+    expect(url.searchParams.get('prompt')).toBe('consent')
+    expect(url.searchParams.get('response_type')).toBe('code')
+    expect(url.searchParams.get('client_id')).toBe('cid')
+  })
+
+  it('asks for the Forms scopes so M4 needs no re-consent', () => {
+    const scope = new URL(buildAddAccountUrl('sub-1')).searchParams.get('scope') ?? ''
+    expect(scope).toContain('https://www.googleapis.com/auth/forms.body')
+    expect(scope).toContain('https://www.googleapis.com/auth/drive')
+  })
+
+  it('carries the calling subject in the state, not in a readable param', () => {
+    const url = new URL(buildAddAccountUrl('sub-1'))
+    expect(url.searchParams.get('sub')).toBeNull()
+    expect(verifyState(url.searchParams.get('state') ?? '')?.sub).toBe('sub-1')
+  })
+
+  it('normalises a PUBLIC_URL with a trailing slash (Google compares it exactly)', () => {
+    process.env.PUBLIC_URL = 'https://workspace.example.com/'
+    expect(new URL(buildAddAccountUrl('s')).searchParams.get('redirect_uri')).toBe(
+      'https://workspace.example.com/accounts/callback'
+    )
+  })
+
+  it('refuses without PUBLIC_URL rather than sending Google a URI it will reject', () => {
+    process.env.PUBLIC_URL = ''
+    expect(() => buildAddAccountUrl('sub-1')).toThrow(/PUBLIC_URL/)
+  })
+
+  it('refuses without a client id', () => {
+    process.env.GOOGLE_OAUTH_CLIENT_ID = ''
+    expect(() => buildAddAccountUrl('sub-1')).toThrow(/GOOGLE_OAUTH_CLIENT_ID/)
+  })
+})
+
+describe('route registration', () => {
+  it('is a GET on the path registered with Google', () => {
+    expect(accountCallbackRoute()).toMatchObject({ method: 'GET', path: '/accounts/callback' })
+    expect(ACCOUNT_CALLBACK_PATH).toBe('/accounts/callback')
+  })
+})
+
+describe('callback gate', () => {
+  it('refuses a callback with no state and renders nothing else', async () => {
+    const res = fakeRes()
+    await handleAccountCallback(get('/accounts/callback?code=abc'), res as never)
+    expect(res.status).toBe(400)
+    expect(res.body).not.toContain('abc')
+  })
+
+  it('refuses a state that does not verify', async () => {
+    const res = fakeRes()
+    await handleAccountCallback(get('/accounts/callback?code=abc&state=not-a-state'), res as never)
+    expect(res.status).toBe(400)
+  })
+
+  it('refuses an expired state', async () => {
+    vi.useFakeTimers()
+    try {
+      const state = signState('sub-1')
+      vi.advanceTimersByTime(STATE_TTL_MS + 1000)
+      const res = fakeRes()
+      await handleAccountCallback(get(`/accounts/callback?code=abc&state=${state}`), res as never)
+      expect(res.status).toBe(400)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // A caller with no valid state gets the same 400 whether or not they also sent
+  // an `error`, so probing cannot distinguish the two.
+  it('checks the state before a Google error param', async () => {
+    const res = fakeRes()
+    await handleAccountCallback(get('/accounts/callback?error=access_denied'), res as never)
+    expect(res.status).toBe(400)
+    expect(res.body).not.toContain('access_denied')
+  })
+
+  it('reports a Google denial once the state is valid', async () => {
+    const res = fakeRes()
+    await handleAccountCallback(get(`/accounts/callback?error=access_denied&state=${signState('sub-1')}`), res as never)
+    expect(res.status).toBe(400)
+    expect(res.body).toContain('access_denied')
+  })
+
+  it('refuses a valid state with no code', async () => {
+    const res = fakeRes()
+    await handleAccountCallback(get(`/accounts/callback?state=${signState('sub-1')}`), res as never)
+    expect(res.status).toBe(400)
+  })
+
+  it('never reflects the state back into the page', async () => {
+    const state = signState('sub-1')
+    const res = fakeRes()
+    await handleAccountCallback(get(`/accounts/callback?state=${state}`), res as never)
+    expect(res.body).not.toContain(state)
+  })
+})
+
+describe('callback success path', () => {
+  const saveTokens = vi.fn(async () => 'added@example.com')
+  const seenSubjects: (string | undefined)[] = []
+
+  beforeEach(async () => {
+    saveTokens.mockClear()
+    seenSubjects.length = 0
+    const { currentSubject } = await import('./subject-context.js')
+    const credentialState = await import('./credential-state.js')
+    vi.spyOn(credentialState, 'getAuth').mockImplementation(() => {
+      seenSubjects.push(currentSubject())
+      return { saveTokens } as never
+    })
+    vi.spyOn(credentialState, 'resolveCredentialState').mockResolvedValue('configured')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ access_token: 'at', id_token: 'x' }), { status: 200 }))
+    )
+  })
+
+  it('stores the account inside the subject scope taken from the state', async () => {
+    const res = fakeRes()
+    await handleAccountCallback(get(`/accounts/callback?code=abc&state=${signState('sub-from-jwt')}`), res as never)
+    expect(res.status).toBe(200)
+    expect(res.body).toContain('added@example.com')
+    // The bucket comes from the CALLER's JWT sub, never from the new account.
+    expect(seenSubjects).toEqual(['sub-from-jwt'])
+  })
+
+  it('passes the signed makePrimary flag through to the store', async () => {
+    await handleAccountCallback(
+      get(`/accounts/callback?code=abc&state=${signState('s', { makePrimary: true })}`),
+      fakeRes() as never
+    )
+    expect(saveTokens).toHaveBeenCalledWith(expect.anything(), { makePrimary: true })
+  })
+
+  it('sends the same redirect_uri to the token endpoint that it sent to authorize', async () => {
+    await handleAccountCallback(get(`/accounts/callback?code=abc&state=${signState('s')}`), fakeRes() as never)
+    const body = (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.body as URLSearchParams
+    // Google rejects the exchange with invalid_grant if these differ.
+    expect(body.get('redirect_uri')).toBe('https://workspace.example.com/accounts/callback')
+    expect(body.get('grant_type')).toBe('authorization_code')
+    expect(body.get('code')).toBe('abc')
+  })
+
+  it('reports a failed token exchange without storing anything', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('invalid_grant', { status: 400 }))
+    )
+    const res = fakeRes()
+    await handleAccountCallback(get(`/accounts/callback?code=abc&state=${signState('s')}`), res as never)
+    expect(res.status).toBe(500)
+    expect(saveTokens).not.toHaveBeenCalled()
+  })
+
+  it('escapes the stored email into the page', async () => {
+    saveTokens.mockResolvedValueOnce('<script>alert(1)</script>@x.com' as never)
+    const res = fakeRes()
+    await handleAccountCallback(get(`/accounts/callback?code=abc&state=${signState('s')}`), res as never)
+    expect(res.body).not.toContain('<script>')
+    expect(res.body).toContain('&lt;script&gt;')
+  })
+
+  // Two consents for one user arriving together must not interleave: AccountStore.put
+  // is read-modify-write over a single blob written with write-then-rename.
+  it('serialises two concurrent callbacks for the same subject', async () => {
+    let inFlight = 0
+    let overlapped = false
+    saveTokens.mockImplementation(async () => {
+      inFlight += 1
+      if (inFlight > 1) overlapped = true
+      await new Promise((r) => setTimeout(r, 10))
+      inFlight -= 1
+      return 'added@example.com'
+    })
+    const state = signState('same-sub')
+    await Promise.all([
+      handleAccountCallback(get(`/accounts/callback?code=a&state=${state}`), fakeRes() as never),
+      handleAccountCallback(get(`/accounts/callback?code=b&state=${state}`), fakeRes() as never)
+    ])
+    expect(overlapped).toBe(false)
+    expect(saveTokens).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps two different subjects in their own scopes when concurrent', async () => {
+    saveTokens.mockImplementation(async () => {
+      await new Promise((r) => setTimeout(r, 5))
+      return 'added@example.com'
+    })
+    await Promise.all([
+      handleAccountCallback(get(`/accounts/callback?code=a&state=${signState('alice')}`), fakeRes() as never),
+      handleAccountCallback(get(`/accounts/callback?code=b&state=${signState('bob')}`), fakeRes() as never)
+    ])
+    expect(seenSubjects.slice().sort()).toEqual(['alice', 'bob'])
+  })
+
+  // A failed write must not wedge the per-subject queue for that user forever.
+  it('recovers after a failed write for the same subject', async () => {
+    saveTokens.mockRejectedValueOnce(new Error('store exploded'))
+    const first = fakeRes()
+    await handleAccountCallback(get(`/accounts/callback?code=a&state=${signState('s')}`), first as never)
+    expect(first.status).toBe(500)
+
+    const second = fakeRes()
+    await handleAccountCallback(get(`/accounts/callback?code=b&state=${signState('s')}`), second as never)
+    expect(second.status).toBe(200)
+  })
+})
