@@ -11,11 +11,19 @@ export interface GoogleTokens {
 }
 
 export class WorkspaceAuth {
-  private accounts = new AccountStore()
+  private accounts: AccountStore
 
   // scopes kept for parity with the upstream AuthManager(scopes) contract; not currently read
   // by the OAuth setup flow, which uses its own WORKSPACE_SCOPES (see oauth-setup.ts).
-  constructor(public readonly scopes: string[]) {}
+  //
+  // `sub` là JWT subject của chế độ HTTP multi-user; nó chỉ đi thẳng xuống store.
+  // Không truyền = null = bucket single-user của stdio.
+  constructor(
+    public readonly scopes: string[],
+    sub: string | null = null
+  ) {
+    this.accounts = new AccountStore(sub)
+  }
 
   /** Lưu token cho một account. Trả về email đã dùng làm key. */
   async saveTokens(tokens: GoogleTokens, opts: { email?: string; makePrimary?: boolean } = {}): Promise<string> {
