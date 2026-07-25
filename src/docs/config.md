@@ -14,7 +14,7 @@ works independently of the domain tools.
 | `setup_complete` | Re-checks stored credentials after an external config change. |
 | `set` | No mutable runtime settings -- returns an informational no-op. |
 | `cache_clear` | No client-side cache -- returns an informational no-op. |
-| `account_add` | Starts a browser consent flow for one more Google account. Returns `{open, next}`; open the `open` URL to complete the consent. stdio only. |
+| `account_add` | Starts a browser consent flow for one more Google account. Returns `{open, next, default_account}`; open the `open` URL to complete the consent. Works in stdio and HTTP. |
 | `account_list` | Returns `{accounts, primary}`. |
 | `account_remove` | Forgets the account named in `account`. Returns `{removed, primary}`. |
 | `account_set_default` | Makes the account named in `account` the primary one. Returns `{primary}`. |
@@ -40,20 +40,27 @@ the primary account.
 
 ### account_add
 
-- **stdio only.** The remote flow needs a fixed callback route inside the
-  already-running server, and `runHttpServer` has no way to add one yet -- it
-  arrives with the HTTP/remote milestone.
+- Works in **both** transports, and picks the flow for you. In stdio it stands a
+  temporary consent server on a loopback port; over HTTP it hands you a URL that
+  comes back to a fixed `/accounts/callback` on the running server, because a
+  Web OAuth client's redirect URI has to be registered in advance.
 - Requires `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` in the
-  environment.
+  environment. The HTTP flow also needs `PUBLIC_URL` and `CREDENTIAL_SECRET`.
 - Returns the URL immediately rather than blocking on the consent. Open it, sign
   in as the account you want to add, then call `account_list` to confirm the
   outcome.
 - Which account gets added is decided by whom you sign in as on the consent
   screen. `account_add` does **not** read the `account` parameter.
-- Pass `value="primary"` to make the newly added account the primary one.
-- The temporary consent server closes itself 10 minutes after the call, so an
-  abandoned flow does not hold its port open. Call `account_add` again if the URL
-  has gone stale.
+- Pass `value="primary"` to make the newly added account the primary one. This
+  is **stdio only**: over HTTP the request would have to travel in the URL and
+  back through Google, where anyone who obtained it could point your default at
+  an account of theirs. Remote callers get told it was ignored and should use
+  `account_set_default` instead. (Either way, the very first account in an empty
+  store becomes primary -- a store of accounts with no working default would be
+  broken.)
+- The link is good for 10 minutes and works once. In stdio the temporary consent
+  server also closes itself after that window, so an abandoned flow does not hold
+  its port open. Call `account_add` again if the URL has gone stale.
 
 ## key / value
 

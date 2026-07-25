@@ -63,9 +63,15 @@ awaiting setup. Naming an account that is not configured is an error that names
 it -- the call is never rerouted to the primary, because a silent fallback would
 act on the wrong mailbox.
 
-`account_add` works in stdio mode only for now. The remote transport needs a fixed
-OAuth callback route inside the already-running server, which arrives together with
-the HTTP/remote transport.
+`account_add` works in both transports and chooses the flow itself: a temporary
+loopback consent server in stdio, and a fixed `/accounts/callback` on the running
+server over HTTP, since a Web OAuth client's redirect URI must be registered in
+advance. The HTTP link is single-use and expires in 10 minutes.
+
+`value="primary"` is stdio only. Over HTTP that request would have to ride the
+URL through Google, where anyone who obtained it could aim your default account
+at one of theirs -- so remote callers change the default with
+`account_set_default` instead, from inside an authenticated call.
 
 ### Coming from an earlier single-account build
 

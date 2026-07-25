@@ -191,14 +191,16 @@ export function resetNonceStoreForTesting(): void {
 /**
  * Spend a state's nonce, returning false if it was already spent.
  *
- * Why single-use matters beyond "replay is untidy": a state carries the signed
- * `mp` (make-primary) flag, so replaying one minted with `value="primary"` lets
- * the replayer attach THEIR Google account as the victim's PRIMARY. Every later
- * tool call the victim makes without an explicit `account=` -- the default path,
- * the one most calls take -- would then run against the attacker's Drive, Gmail
- * and Docs. The victim's existing data is not read, but everything they create
- * from that point lands in someone else's account. That is a different severity
- * from "an unwanted extra account appears in account_list".
+ * What a usable state is worth to someone who is not its owner: they can add a
+ * Google account of their choosing to that subject's bucket. Nothing already in
+ * the bucket is read, and the default account cannot be moved -- the state
+ * carries no privilege to move it (see `StatePayload`), so an untargeted tool
+ * call still runs against whatever the owner had set. So the ceiling is an
+ * unwanted account appearing in `account_list`.
+ *
+ * (Historical: the state once carried a signed `mp` make-primary flag, which
+ * raised that ceiling to taking over the default account. It was removed rather
+ * than defended, because single-use cannot cover the racing order in (2) below.)
  *
  * `SessionKv` has no TTL and no compare-and-set, so expiry is stored in the
  * value and the read-then-write is made atomic by the caller: this runs inside
@@ -233,13 +235,9 @@ export function resetNonceStoreForTesting(): void {
  * Durable Object storage is strongly consistent and would close (1). It is
  * deliberately not used: it needs a second DO class, binding and migration, and
  * it would tighten a seconds-wide window while leaving (2) -- the likelier
- * ordering -- exactly as it is.
- *
- * The lever actually pulled on harm was the other one: no make-primary flag
- * travels in the state at all (see `StatePayload`), so whoever uses a stolen
- * state -- by either ordering -- can at most add an account to the bucket, not
- * take over the default that untargeted tool calls run against. This barrier
- * still earns its place on top of that, mostly for the detection in (2).
+ * ordering -- exactly as it is. Harm was capped at the `StatePayload` end
+ * instead, which covers both orderings; this barrier sits on top of that cap,
+ * not in place of it.
  */
 export async function claimNonce(nonce: string, exp: number, now: number = Date.now()): Promise<boolean> {
   const kv = nonceKv()
