@@ -207,6 +207,69 @@ describe('config', () => {
         vi.resetModules()
       }
     })
+
+    // Remote: a subject scope exists, so account_add must NOT stand up a local
+    // consent server -- it returns the fixed /accounts/callback URL carrying the
+    // caller's identity in a signed state.
+    it('account_add inside a subject scope uses the remote callback, not a local port', async () => {
+      process.env.CREDENTIAL_SECRET = 'test-secret-at-least-32-chars-long-xx'
+      process.env.PUBLIC_URL = 'https://workspace.example.com'
+      vi.resetModules()
+      let localFlowStarted = false
+      vi.doMock('../auth/add-account.js', () => ({
+        startAddAccount: async () => {
+          localFlowStarted = true
+          return { url: 'http://127.0.0.1:9999/', done: Promise.resolve('x@example.com') }
+        }
+      }))
+      try {
+        const { config: freshConfig } = await import('./config.js')
+        const { runWithSubject } = await import('../auth/subject-context.js')
+        const { verifyState } = await import('../auth/add-account-remote.js')
+
+        const body = (await runWithSubject('sub-alice', async () =>
+          JSON.parse(textOf(await freshConfig({ action: 'account_add', value: 'primary' })))
+        )) as { open: string; default_account: string }
+
+        expect(localFlowStarted).toBe(false)
+        const url = new URL(body.open)
+        expect(url.searchParams.get('redirect_uri')).toBe('https://workspace.example.com/accounts/callback')
+        // The bucket the account will join is the CALLER's, carried in the state.
+        const state = verifyState(url.searchParams.get('state') ?? '')
+        expect(state?.sub).toBe('sub-alice')
+        // value="primary" is refused remotely, and the caller is TOLD so rather
+        // than left believing their default changed.
+        expect(state).not.toHaveProperty('mp')
+        expect(body.default_account).toMatch(/not available in remote mode/)
+        expect(body.default_account).toMatch(/account_set_default/)
+      } finally {
+        vi.doUnmock('../auth/add-account.js')
+        vi.resetModules()
+      }
+    })
+
+    it('tells a remote caller how to change the default when they did not ask to', async () => {
+      process.env.CREDENTIAL_SECRET = 'test-secret-at-least-32-chars-long-xx'
+      process.env.PUBLIC_URL = 'https://workspace.example.com'
+      // config and subject-context MUST come from the same module instance --
+      // a sibling test calls vi.resetModules(), and a fresh subject-context
+      // carries its own AsyncLocalStorage, so a mismatched pair leaves
+      // currentSubject() undefined and silently takes the stdio branch.
+      vi.resetModules()
+      const { config: freshConfig } = await import('./config.js')
+      const { runWithSubject } = await import('../auth/subject-context.js')
+
+      const body = (await runWithSubject('sub-alice', async () =>
+        JSON.parse(textOf(await freshConfig({ action: 'account_add' })))
+      )) as { default_account: string }
+
+      expect(body.default_account).toMatch(/does not change your default/)
+      expect(body.default_account).toMatch(/account_set_default/)
+      // The empty-bucket case is real (AccountStore promotes the first account
+      // so a bucket is never left without a working primary) and is stated
+      // rather than hidden.
+      expect(body.default_account).toMatch(/no accounts at all/)
+    })
   })
 
   describe('invalid action', () => {

@@ -15,6 +15,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { runHttpServer } from '@n24q02m/mcp-core'
 import { type SessionKv, wrapKvBackendAsSessionKv } from '@n24q02m/mcp-core/auth'
 import { backendFromEnv } from '@n24q02m/mcp-core/storage'
+import { accountCallbackRoute } from '../auth/add-account-remote.js'
 import { getAuth, resolveCredentialState } from '../auth/credential-state.js'
 import { deriveSubjectStrict, WORKSPACE_SCOPES } from '../auth/oauth-setup.js'
 import { runWithSubject } from '../auth/subject-context.js'
@@ -133,6 +134,12 @@ export async function startHttp(): Promise<void> {
       serverName: SERVER_NAME,
       port,
       host,
+      // The only way a consumer owns an endpoint in this process: mcp-core tries
+      // `/mcp` and `/health` first (so neither can be shadowed) and its OAuth app
+      // is a catch-all for everything after, which would otherwise swallow this
+      // path. The route gates itself on a state this server signed -- mcp-core's
+      // relay-password gate covers `/authorize`, not routes registered here.
+      extraRoutes: [accountCallbackRoute()],
       // KHÔNG truyền `authDisabled`. Ràng buộc M3: không bật cờ auth-bypass trên
       // hạ tầng của repo. Sâu hơn: ở chế độ đó mcp-core cấp claims anonymous,
       // không có sub để keyed credential -- tức mâu thuẫn trực tiếp với

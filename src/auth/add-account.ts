@@ -6,10 +6,16 @@
  * differs from runOAuthSetup() in that this returns the URL IMMEDIATELY so a
  * tool call can hand it to the user -- the waiting lives in the `done` promise.
  *
- * Remote HTTP (M3) cannot use this path: there it needs a fixed callback endpoint
- * inside the already-running server, and runHttpServer has no way to add a route
- * (RunHttpServerOptions exposes no hook, auth/router.ts is not exported) -- see
- * correction 2 in the M2 plan.
+ * This is the STDIO path only. Remote has its own (`add-account-remote.ts`): a
+ * Web OAuth client's redirect URI must be registered ahead of time, so it cannot
+ * be a loopback port picked at runtime, and the callback has to live at a fixed
+ * path inside the already-running server -- which `extraRoutes` (mcp-core >=
+ * 1.22) makes possible. `config(action="account_add")` picks between the two on
+ * `currentSubject()`.
+ *
+ * `makePrimary` stays available HERE and deliberately not there: nothing in this
+ * flow crosses a URL, so there is no token a third party could present to
+ * promote an account of their own. Remote callers use `account_set_default`.
  */
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -67,6 +73,14 @@ export async function startAddAccount(
     () => new Server({ name: SERVER_NAME, version: '0.0.0' }, { capabilities: {} }) as unknown as McpServer,
     {
       serverName: SERVER_NAME,
+      // This function hands the URL back to the caller, which surfaces it in the
+      // tool result -- so mcp-core opening a tab of its own would be a SECOND
+      // entry point into the same temporary server, and the user would start two
+      // consent flows without knowing it. Note this removes one source of extra
+      // tabs, not the need for the grace window below: the user clicking the
+      // returned link twice, or reloading the finished page, still produces late
+      // redirects that must land somewhere alive (consent-server.ts).
+      openBrowser: false,
       delegatedOAuth: {
         flow: 'redirect',
         upstream: {

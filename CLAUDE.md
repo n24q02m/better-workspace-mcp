@@ -10,7 +10,7 @@ Trang thai: M2 multi-account COMPLETE (Task 9 smoke that voi 2 Google account da
 
 ## Modes
 
-stdio mode (mac dinh, single-user qua env credentials) la target M1-M2. HTTP/multi-user la M3. `account_add` chi chay duoc o stdio — xem Multi-account.
+stdio mode (mac dinh, single-user qua env credentials) la target M1-M2. HTTP/multi-user la M3. `account_add` chay duoc o CA HAI mode va tu chon duong di theo `currentSubject()`: co subject scope (= remote, `authScope` mo tu Bearer JWT) thi tra URL toi `/accounts/callback` co dinh; khong co (= stdio) thi dung server tam tren loopback. Xem Multi-account.
 
 ## Multi-account
 
@@ -18,7 +18,10 @@ stdio mode (mac dinh, single-user qua env credentials) la target M1-M2. HTTP/mul
 - Account cua tung request di qua `AsyncLocalStorage` (`src/auth/account-context.ts`), KHONG qua tham so: service vendored la singleton khoi tao luc module-load (`src/tools/domains/factory.ts`) va chu ky upstream `getAuthenticatedClient()` khong nhan tham so — giu nguyen chu ky do chinh la giu vendored boundary. Shim `src/vendored/auth/AuthManager.ts` doc `currentAccount()` roi chuyen xuong `WorkspaceAuth`.
 - `getAuthenticatedClient(account?)` dung `OAuth2Client` MOI moi lan goi. KHONG cache client: closure cua listener `'tokens'` giu snapshot record cu, va cache dung chung giua cac account = loi isolation credential. Giu merge order `{...record, ...t}` (google-auth-library khong kem refresh_token khi refresh).
 - Goi tool voi account la = LOI co ten account do + liet ke account da cau hinh. KHONG am tham roi ve primary (se hanh dong tren sai mailbox).
-- `account_add` chi o stdio (`src/auth/add-account.ts`: one-shot `runHttpServer` tra URL ngay, TTL 10 phut). Remote thuoc M3 vi `RunHttpServerOptions` khong co hook route nao va `auth/router.ts` khong export ra khoi mcp-core → M3 can them `extraRoutes` vao mcp-core (PR rieng, general-purpose).
+- `account_add` co HAI duong, chon theo `currentSubject()`:
+  - **stdio** (`src/auth/add-account.ts`): one-shot `runHttpServer` tren loopback, tra URL ngay, TTL 10 phut. Nhan `value="primary"`.
+  - **remote** (`src/auth/add-account-remote.ts`): route co dinh `/accounts/callback` dang ky qua `extraRoutes` (mcp-core >= 1.22), vi redirect URI cua Web OAuth client phai dang ky truoc nen khong the la port loopback ngau nhien. `sub` cua nguoi goi di theo mot **state ky bang HMAC** (khoa HKDF rieng tu `CREDENTIAL_SECRET`, KHONG phai `JWTIssuer` — token do se la Bearer dung duoc cho `/mcp`). State la single-use (nonce claim qua KV) va **KHONG mang co make-primary**: state di qua browser + Google, ai cam duoc no se doat duoc default account. Remote doi default bang `account_set_default`.
+- Ghi credential o callback remote duoc **serialize theo subject**: `AccountStore.put` la read-modify-write tren mot blob (write-then-rename), ma remote khong co flow object de giu guard mot-consent nhu stdio.
 - Nang tu M1 (blob phang): server tu nhan ve (adopt) khi suy duoc email tu `id_token` — offline, la case thuong gap vi M1 xin `openid`+`email` va luu ca token response. Neu khong suy duoc thi hoi Google userinfo (CAN MANG). Ca hai that bai: state ve `awaiting_setup`, server mo OAuth, va lan consent DO GHI DUOC — `put(..., {absorbLegacy: true})` mang blob cu sang key `UNIDENTIFIED_ACCOUNT = '(unidentified)'` thay vi de len no. Account vua consent thanh primary; `(unidentified)` hien o `account_list`, xoa duoc bang `account_remove`, va `remove()` KHONG de no len primary khi con account thuc. Da viet ro trong README + `src/docs/config.md`.
 - Guard cua `put()` VAN nguyen tac dung cho duong goi truc tiep khong kem `absorbLegacy` (test khang dinh ca hai chieu). Chi `WorkspaceAuth.saveTokens` truyen co do — moi caller ngoai cua no (`runOAuthSetup`, `startAddAccount`) dung sau mot lan consent nguoi dung vua hoan tat. **Ly do co nay ton tai**: khong co no thi guard chan chinh lan ghi cua consent → startup fail, ma `setup_reset` lai can server dang chay = trang thai khong thoat duoc bang cong cu trong san pham (chi con xoa tay `~/.better-workspace-mcp/config.json`). Them guard thi phai hoi: duong PHUC HOI co di qua chinh cai vua chan khong?
 - Scope Forms (`forms.body`, `forms.responses.readonly`) da xin san o M2 de M4 khong phai re-consent. Nhung Google KHONG noi quyen cho token da phat: account cap quyen TRUOC thay doi nay van phai re-consent khi M4 goi Forms; account them sau thi khong.
@@ -42,4 +45,8 @@ bun run build       # tsc -build + scripts/build-cli.js -> bin/cli.mjs
 
 ## Dependency dac biet
 
-`@n24q02m/mcp-core` pin `1.20.0` (stable npm, co feature `authorizeParams` cho Google refresh_token qua delegated redirect + access_type=offline — dung o `src/auth/oauth-setup.ts`). `1.20.0` co `build/` byte-identical voi `1.20.0-beta.3` (beta nay = mcp-core main sau merge PR #669), nen bump beta -> stable khong doi API. Giu exact pin (khong caret) de moi lan doi mcp-core deu di qua mot Renovate PR + CI.
+`@n24q02m/mcp-core` pin `1.22.0-beta.1` (exact, khong caret — de moi lan doi mcp-core deu di qua mot Renovate PR + CI). Day la BETA co chu dich: `dist-tags.latest` van la `1.21.0`, nhung M3 can hai thu chi co tu `1.22.0-beta.1`:
+- `extraRoutes: HttpRoute[]` — duong DUY NHAT de consumer so huu mot endpoint trong process cua `runHttpServer`. `/mcp` + `/health` duoc thu TRUOC (khong shadow duoc), OAuth app la catch-all cho phan con lai, nen route dang ky o day nam giua. Dung cho `/accounts/callback`.
+- `openBrowser?: boolean` — tat tab tu-mo cua mcp-core khi consumer da tu dua URL cho nguoi dung. Dat `false` o `add-account.ts`. **KHONG** dat o `oauth-setup.ts`: do la duong setup lan dau, tat tab se giet trai nghiem cua nguoi khong doc stderr.
+
+Cai nay KHONG thay the grace window cua `consent-server.ts` — no bo mot NGUON tab (mcp-core), con tab muon do nguoi dung tu bam lai thi van can cho dap xuong.
