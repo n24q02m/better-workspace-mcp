@@ -1,22 +1,95 @@
 # config
 
-Manage server configuration and Google credential state. Does not require a
-configured Google account -- works independently of the domain tools (`docs`,
-and the 9 more domains landing in Task 7).
+Manage server configuration, Google credential state, and the set of Google
+accounts this server can act as. Does not require a configured Google account --
+works independently of the domain tools.
 
 ## Actions
 
 | Action | Description |
 | --- | --- |
-| `status` | Returns the current credential state (`awaiting_setup` \| `configured`). |
+| `status` | Returns `{state, configured, accounts, primary}` -- the credential state (`awaiting_setup` \| `configured`), the configured account emails, and which one is primary. |
 | `setup_start` | Returns instructions to trigger the browser Google OAuth consent flow (stdio mode: restart the server). |
-| `setup_reset` | Clears stored credentials and returns to `awaiting_setup`. |
+| `setup_reset` | Clears stored credentials for **every** account and returns to `awaiting_setup`. |
 | `setup_complete` | Re-checks stored credentials after an external config change. |
-| `set` | No mutable runtime settings in M1 -- returns an informational no-op. |
-| `cache_clear` | No client-side cache in M1 -- returns an informational no-op. |
+| `set` | No mutable runtime settings -- returns an informational no-op. |
+| `cache_clear` | No client-side cache -- returns an informational no-op. |
+| `account_add` | Starts a browser consent flow for one more Google account. Returns `{open, next}`; open the `open` URL to complete the consent. stdio only. |
+| `account_list` | Returns `{accounts, primary}`. |
+| `account_remove` | Forgets the account named in `account`. Returns `{removed, primary}`. |
+| `account_set_default` | Makes the account named in `account` the primary one. Returns `{primary}`. |
 
-`key` / `value` are accepted on the `config` tool schema but are currently
-unused (M1 has no mutable settings).
+## Accounts
 
-Single-account only in M1 -- there are no `account_*` actions; those ship in
-M2 alongside per-account routing for the domain tools.
+Every domain tool takes `account="<email>"`. Omit it and the call runs against
+the primary account.
+
+- The first account stored becomes the primary automatically.
+- Removing the primary promotes one of the remaining accounts -- `account_remove`
+  reports which one in `primary`.
+- Removing the last account clears the credential blob and puts the server back
+  in `awaiting_setup`; domain tools are refused again until an account is
+  configured.
+- Naming an account that is not configured is an **error that names the
+  account**, and lists what is configured. The call is never silently rerouted to
+  the primary -- a silent fallback would act on the wrong mailbox.
+- Emails are the account keys, matched case-insensitively and stored lowercased.
+- `account_remove` and `account_set_default` require `account` and have no
+  default: falling back to the primary would remove or reshuffle the wrong
+  account. `account_set_default` on an unknown account is an error.
+
+### account_add
+
+- **stdio only.** The remote flow needs a fixed callback route inside the
+  already-running server, and `runHttpServer` has no way to add one yet -- it
+  arrives with the HTTP/remote milestone.
+- Requires `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` in the
+  environment.
+- Returns the URL immediately rather than blocking on the consent. Open it, sign
+  in as the account you want to add, then call `account_list` to confirm the
+  outcome.
+- Which account gets added is decided by whom you sign in as on the consent
+  screen. `account_add` does **not** read the `account` parameter.
+- Pass `value="primary"` to make the newly added account the primary one.
+- The temporary consent server closes itself 10 minutes after the call, so an
+  abandoned flow does not hold its port open. Call `account_add` again if the URL
+  has gone stale.
+
+## key / value
+
+`key` is accepted on the schema but unused. `value` is read only by `account_add`
+(`value="primary"`).
+
+## Upgrading from the single-account layout
+
+Credentials written before multi-account support are a single flat blob of tokens.
+The first run afterwards adopts that blob into the multi-account layout, keyed by
+the account's email:
+
+- The email comes from the stored `id_token` when it is there. That needs no
+  network and is the usual case.
+- Otherwise the server asks Google's userinfo endpoint, which needs network
+  access and a token that is still valid or refreshable.
+
+If neither works, the state falls back to `awaiting_setup` and the server starts the
+browser OAuth flow even though the stored token may still be good. Completing that
+consent does work, and nothing is discarded: the newly authorized account is stored
+and becomes the primary, and the old blob is carried across under the key
+`(unidentified)` rather than being overwritten. `account_list` then shows two
+entries:
+
+```json
+{ "accounts": ["(unidentified)", "you@example.com"], "primary": "you@example.com" }
+```
+
+`(unidentified)` holds the tokens whose owner could not be determined. Nothing
+routes to it -- it is never promoted to primary while a real account remains, and
+no call can select it unless you name it. Remove it once the re-authorized account
+is working:
+
+```json
+{ "action": "account_remove", "account": "(unidentified)" }
+```
+
+After a successful adoption -- the usual case -- `account_list` shows exactly one
+account and it is the primary.

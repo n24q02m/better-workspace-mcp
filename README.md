@@ -35,6 +35,78 @@
 
 (Add example commands here.)
 
+## Multi-account
+
+Every domain tool takes an `account` parameter -- the email of the Google account
+the call acts as. Omit it and the call runs against the primary account.
+
+```json
+{ "action": "search", "query": "is:unread", "account": "work@example.com" }
+{ "action": "search", "query": "is:unread" }
+```
+
+Those two `gmail` calls read two different mailboxes: the first `work@example.com`,
+the second whichever account is primary.
+
+Accounts are managed through the `config` tool:
+
+| Call | Effect |
+| --- | --- |
+| `config(action="account_add")` | Returns a URL to open; completing the Google consent there adds one more account. |
+| `config(action="account_list")` | The configured accounts and which one is primary. |
+| `config(action="account_remove", account="<email>")` | Forget one account. |
+| `config(action="account_set_default", account="<email>")` | Make one account the primary. |
+
+The first account authorized becomes the primary. Removing the primary promotes
+one of the remaining accounts; removing the last one puts the server back to
+awaiting setup. Naming an account that is not configured is an error that names
+it -- the call is never rerouted to the primary, because a silent fallback would
+act on the wrong mailbox.
+
+`account_add` works in stdio mode only for now. The remote transport needs a fixed
+OAuth callback route inside the already-running server, which arrives together with
+the HTTP/remote transport.
+
+### Coming from an earlier single-account build
+
+Credentials stored by a build from before multi-account support are one flat blob
+of tokens. The first run afterwards adopts that blob into the multi-account layout
+under the account's email. The email comes from the stored `id_token` when it is
+present -- no network needed, and that is the usual case. Otherwise the server asks
+Google's userinfo endpoint, which needs network access and a token that is still
+valid or refreshable.
+
+If neither works, the server reports itself as awaiting setup and opens the browser
+OAuth flow even though the stored token may still be fine. Completing that consent
+works, and nothing is discarded: the account you just authorized is stored and
+becomes the primary, while the old tokens are carried across under the key
+`(unidentified)` rather than being overwritten. `config(action="account_list")` then
+shows two entries:
+
+```json
+{ "accounts": ["(unidentified)", "you@example.com"], "primary": "you@example.com" }
+```
+
+Nothing routes to `(unidentified)`: it is never promoted to primary while a real
+account remains, and no call reaches it unless you name it explicitly. It is there
+so a credential whose owner could not be determined is not silently thrown away.
+Remove it once the re-authorized account is working:
+
+```json
+{ "action": "account_remove", "account": "(unidentified)" }
+```
+
+After a successful adoption -- the usual case -- `config(action="account_list")`
+shows exactly one account, and it is the primary.
+
+### Forms scopes and re-consent
+
+The consent screen already requests the Google Forms scopes, so the Forms domain
+can be added later without a second trip through consent. Google does not widen a
+token that has already been issued, though: an account authorized *before* those
+scopes were added keeps the older scope set and will need one re-consent the first
+time Forms is called. Accounts added afterwards will not.
+
 ## Documentation
 
 Full docs at [better-workspace-mcp.n24q02m.com](https://better-workspace-mcp.n24q02m.com).

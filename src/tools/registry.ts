@@ -60,7 +60,7 @@ const VALID_HELP_TOPICS_STRING = HELP_TOPICS.join(', ')
 /**
  * A domain's mega-tool definition, derived from its DomainDef -- action enum
  * comes from `actions`, extra params from `inputProps`, and `account` is
- * appended for every domain (accepted, ignored in M1 single-account mode).
+ * appended for every domain (selects which Google account the call acts as).
  */
 function domainToolDef(domain: DomainDef) {
   return {
@@ -77,7 +77,10 @@ function domainToolDef(domain: DomainDef) {
       type: 'object',
       properties: {
         action: { type: 'string', enum: [...domain.actions], description: 'Action to perform' },
-        account: { type: 'string', description: 'Account identifier (accepted, ignored in M1 single-account mode)' },
+        account: {
+          type: 'string',
+          description: 'Google account email to act as. Defaults to the primary account (config action="account_list").'
+        },
         ...domain.inputProps
       },
       required: ['action']
@@ -93,7 +96,7 @@ const TOOLS = [
   {
     name: 'config',
     description:
-      'Manage server configuration and credential state.\n\nActions:\n- status: current credential state\n- setup_start: instructions to configure the Google account via browser OAuth\n- setup_reset: clear credentials, return to awaiting_setup\n- setup_complete: re-check credentials after external config changes\n- set: update a runtime setting (M1 has no mutable settings; returns info)\n- cache_clear: clear any cached state (no-op in M1)',
+      'Manage server configuration, credential state, and the Google accounts this server can act as.\n\nActions:\n- status: current credential state plus the configured accounts and which is primary\n- setup_start: instructions to configure the Google account via browser OAuth\n- setup_reset: clear credentials, return to awaiting_setup\n- setup_complete: re-check credentials after external config changes\n- set: update a runtime setting (M1 has no mutable settings; returns info)\n- cache_clear: clear any cached state (no-op in M1)\n- account_add: start the browser consent flow for one more account (returns a URL to open)\n- account_list: list configured accounts and the primary one\n- account_remove (account): forget one account; a remaining account is promoted if it was primary\n- account_set_default (account): make one account the primary (used when a call omits account)',
     annotations: {
       title: 'Config',
       readOnlyHint: false,
@@ -106,11 +109,26 @@ const TOOLS = [
       properties: {
         action: {
           type: 'string',
-          enum: ['status', 'setup_start', 'setup_reset', 'setup_complete', 'set', 'cache_clear'],
+          enum: [
+            'status',
+            'setup_start',
+            'setup_reset',
+            'setup_complete',
+            'set',
+            'cache_clear',
+            'account_add',
+            'account_list',
+            'account_remove',
+            'account_set_default'
+          ],
           description: 'Action to perform'
         },
         key: { type: 'string', description: 'Setting key (for set action)' },
-        value: { type: 'string', description: 'Setting value (for set action)' }
+        value: { type: 'string', description: 'Setting value (for set action)' },
+        account: {
+          type: 'string',
+          description: 'Account email (for account_remove / account_set_default / account_add)'
+        }
       },
       required: ['action']
     }

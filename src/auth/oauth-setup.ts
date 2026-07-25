@@ -5,8 +5,15 @@ import { GOOGLE_AUTHORIZE_URL, GOOGLE_TOKEN_URL, SERVER_NAME } from '../constant
 import { getAuth } from './credential-state.js'
 import type { GoogleTokens } from './workspace-auth.js'
 
-// M1: request the full Workspace scope set upfront so Task 7's added domains
-// need no re-consent. Keep in sync with the vendored services' API needs.
+// M1 aimed to request the full Workspace scope set upfront so domains added
+// later need no re-consent. The Forms set (M4) was missed then and is added
+// here in M2, so the next real consent -- adding a second account -- covers it
+// too, instead of making the user click through another round at M4. Keep in
+// sync with the APIs the vendored services actually call.
+//
+// Note for M4: Google does not widen an already-issued token, so an account
+// authorized BEFORE this change keeps the old scope set and will need a
+// re-consent once Forms is called. Accounts added after it will not.
 export const WORKSPACE_SCOPES = [
   'openid',
   'email',
@@ -19,7 +26,9 @@ export const WORKSPACE_SCOPES = [
   'https://www.googleapis.com/auth/presentations',
   'https://www.googleapis.com/auth/tasks',
   'https://www.googleapis.com/auth/chat.messages',
-  'https://www.googleapis.com/auth/contacts.readonly'
+  'https://www.googleapis.com/auth/contacts.readonly',
+  'https://www.googleapis.com/auth/forms.body',
+  'https://www.googleapis.com/auth/forms.responses.readonly'
 ]
 
 // JWT sub = Google stable user id from the id_token; fallback email → 'local-user'.

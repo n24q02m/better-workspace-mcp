@@ -5,4 +5,6 @@
 - getMe
 - getUserRelations
 
-`account` param accepted (M1: ignored, single-account).
+## Parameters
+
+- account (optional): email of the Google account to use; defaults to the primary account.

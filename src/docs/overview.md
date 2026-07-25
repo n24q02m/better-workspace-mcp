@@ -1,9 +1,31 @@
 # better-workspace-mcp tools
 
-- **docs** -- Google Docs operations (get/write text, create, suggestions, replace, format text). See `help(topic="docs")`.
-- **config** -- server configuration and Google credential state (status, setup, reset). See `help(topic="config")`.
-- **help** -- full documentation for a topic (`docs`, `config`, `overview`).
+One composite tool per Google Workspace service, plus two infra tools.
 
-M1 is single-account: the `account` param on domain tools is accepted but
-ignored. M2 adds multi-account routing plus 9 more domains (drive, calendar,
-gmail, sheets, slides, tasks, chat, people, time).
+- **docs** -- Google Docs (get/write text, create, suggestions, replace, format).
+- **drive** -- files and folders (find, create, search, trash, rename, move, comments, download).
+- **calendar** -- calendars and events (list, create, update, delete, respond, find free time).
+- **gmail** -- mail (search, read, send, drafts, labels, modify messages and threads).
+- **sheets** -- spreadsheets (text, ranges, metadata).
+- **slides** -- presentations (text, slides, shapes, images, tables, speaker notes).
+- **tasks** -- task lists and tasks (list, create, update, complete, delete).
+- **chat** -- Google Chat spaces, messages and DMs.
+- **people** -- contacts and profiles (own profile, user profile, relations).
+- **time** -- local date/time/timezone helpers. Needs no Google account.
+- **config** -- server configuration, credential state, and the Google accounts this server can act as.
+- **help** -- full documentation for a topic.
+
+`help(topic="<name>")` returns the full document for any domain tool above, for
+`config`, or for `overview`. The same documents are exposed as MCP resources
+under `workspace://docs/<name>`.
+
+## Multi-account
+
+Every domain tool takes `account="<email>"`, choosing which Google account the
+call acts as. Omit it and the call runs against the primary account. Manage the
+set of accounts with `config`: `account_add`, `account_list`, `account_remove`,
+`account_set_default` -- see `help(topic="config")`.
+
+Naming an account that is not configured is an error that names it; the call is
+never silently rerouted to the primary. `time` accepts `account` for signature
+parity only -- it needs no Google account.

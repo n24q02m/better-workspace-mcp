@@ -2,11 +2,13 @@
 
 Google Docs operations, dispatched by `action` to the vendored `DocsService`.
 
-## account (M1)
+## account
 
-`account` is accepted in the input but IGNORED in M1 (single-account mode). Every
-call runs against the one Google account configured via
-`config(action="setup_start")`. M2 adds per-account routing.
+`account` is the email address of the Google account the call should act as.
+Omit it and the call runs against the primary account. List what is configured,
+and which one is primary, with `config(action="account_list")`. Naming an account
+that is not configured is an error -- the call is never silently rerouted to the
+primary.
 
 ## Actions
 
