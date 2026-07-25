@@ -183,5 +183,24 @@ describe('AccountStore', () => {
       // blob v2 đang có không bị adoptLegacy làm hỏng
       expect((await store.list()).accounts).toEqual(['one@example.com'])
     })
+
+    it('is a no-op the second time, leaving every account of the v2 blob in place', async () => {
+      // Bảo hiểm cho tuyên bố "gọi lần hai là no-op" trong doc-comment: nếu
+      // adoptLegacy ghi vô điều kiện thì nó thu blob v2 về đúng MỘT account và
+      // xoá sạch những account thêm sau lần adopt -- mất token thật.
+      await new PerPluginStore(STORE_PLUGIN).save({ access_token: 'legacy-at', refresh_token: 'legacy-rt' })
+      const store = new AccountStore()
+      await store.adoptLegacy('adopted@example.com')
+      await store.put('second@example.com', { ...REC, access_token: 'at2' })
+
+      expect(await store.adoptLegacy('adopted@example.com')).toBeNull()
+
+      expect(await store.list()).toEqual({
+        accounts: ['adopted@example.com', 'second@example.com'],
+        primary: 'adopted@example.com'
+      })
+      expect((await store.get('second@example.com'))?.record.access_token).toBe('at2')
+      expect((await store.get('adopted@example.com'))?.record.refresh_token).toBe('legacy-rt')
+    })
   })
 })
