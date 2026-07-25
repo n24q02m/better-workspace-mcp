@@ -138,7 +138,13 @@ describe('M1 stdio protocol E2E', () => {
 
     expect(result.isError).toBeFalsy()
     const body = JSON.parse(textOf(result)) as { state: string; configured: boolean }
-    expect(body).toEqual({ state: 'configured', configured: true })
+    // status also reports the account summary since M2 -- the seeded blob has one.
+    expect(body).toEqual({
+      state: 'configured',
+      configured: true,
+      accounts: ['seed@example.com'],
+      primary: 'seed@example.com'
+    })
   })
 
   it('a domain tool with an unknown action returns a clean error listing valid actions (no crash)', async () => {
