@@ -2,6 +2,8 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { runHttpServer } from '@n24q02m/mcp-core'
 import { GOOGLE_AUTHORIZE_URL, GOOGLE_TOKEN_URL, SERVER_NAME } from '../constants.js'
+import { emailFromIdToken } from './account-store.js'
+import { closeAfterGrace, closeNow } from './consent-server.js'
 import { getAuth } from './credential-state.js'
 import type { GoogleTokens } from './workspace-auth.js'
 
@@ -90,7 +92,7 @@ export function deriveSubjectStrict(tokens: Record<string, unknown>): string {
   return subject
 }
 
-export async function runOAuthSetup(): Promise<void> {
+export async function runOAuthSetup(opts: { graceMs?: number } = {}): Promise<void> {
   const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID
   const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET
   if (!clientId || !clientSecret) {
@@ -102,6 +104,15 @@ export async function runOAuthSetup(): Promise<void> {
     resolveDone = res
     rejectDone = rej
   })
+
+  /**
+   * The one consent allowed to write, resolving with the email it stored. Held as the
+   * in-flight promise, not a flag set after its `await`: two tabs arriving at once would
+   * both find a flag still unset, and two concurrent `saveTokens` calls race the credential
+   * store's write-then-rename into an ENOENT. Same rule as startAddAccount, and it bites
+   * harder here -- see the stderr line below for why this path has two tab sources.
+   */
+  let firstConsent: Promise<string> | null = null
 
   // mcp-core's serverFactory type is McpServer (the high-level SDK wrapper),
   // but runHttpServer only ever calls .connect(transport) on the result --
@@ -123,25 +134,62 @@ export async function runOAuthSetup(): Promise<void> {
           authorizeParams: { access_type: 'offline', prompt: 'consent' } // Task 0 mcp-core field → refresh_token
         },
         onTokenReceived: async (tokens) => {
-          try {
-            await getAuth().saveTokens(tokens as unknown as GoogleTokens)
-            const sub = deriveSubject(tokens as Record<string, unknown>)
-            resolveDone()
-            return sub
-          } catch (err) {
-            rejectDone(err)
-            throw err // let mcp-core also surface its 500 to the browser
+          if (firstConsent === null) {
+            firstConsent = getAuth()
+              .saveTokens(tokens as unknown as GoogleTokens)
+              .then(
+                (email) => {
+                  resolveDone()
+                  return email
+                },
+                (err) => {
+                  rejectDone(err)
+                  throw err // let mcp-core also surface its 500 to the browser
+                }
+              )
+            await firstConsent
+            return deriveSubject(tokens as Record<string, unknown>)
           }
+
+          // A later tab. Rejecting here if the first one failed is right: setup is over
+          // either way, and a late tab must not revive a flow whose server is closing.
+          const setUpAs = await firstConsent
+          if (emailFromIdToken((tokens as unknown as GoogleTokens).id_token) === setUpAs) {
+            // Same account twice -- nothing left to store, so this tab just gets its page.
+            return deriveSubject(tokens as Record<string, unknown>)
+          }
+          // Also the no-email-claim case, where this tab cannot be shown to be the same
+          // account. Refusing costs one more consent; storing it connects a mailbox the
+          // user never chose to set the server up with.
+          throw new Error(
+            `Setup already completed for ${setUpAs}. Use config(action="account_add") to add another account.`
+          )
         }
       }
     }
   )
+  // mcp-core opens this URL itself whenever the stored config is incomplete, which is
+  // always true here -- this flow only runs with no credentials. So the line below is a
+  // FALLBACK, not an instruction: worded as one ("Open <url> to authorize") it asks the user
+  // to start a second consent against the tab already on their screen, and until the grace
+  // window existed the slower of the two tabs got ERR_CONNECTION_REFUSED. The env vars are
+  // mcp-core's own auto-open switch (tryOpenBrowser returns false on either), checked so
+  // this does not promise a tab that will never appear.
+  const url = `http://${handle.host}:${handle.port}/`
+  const autoOpens = !process.env.MCP_NO_BROWSER && !process.env.NO_BROWSER
   process.stderr.write(
-    `[${SERVER_NAME}] Open http://${handle.host}:${handle.port}/ in a browser to authorize Google.\n`
+    autoOpens
+      ? `[${SERVER_NAME}] Waiting for Google authorization -- a browser tab should have opened at ${url}. Go there yourself only if it did not.\n`
+      : `[${SERVER_NAME}] Waiting for Google authorization -- auto-open is off, so go to ${url} in a browser.\n`
   )
   try {
     await finished
-  } finally {
-    await handle.close()
+  } catch (err) {
+    // Nobody is mid-consent on a failure, so there is no late tab worth the port.
+    closeNow(handle)
+    throw err
   }
+  // Hand startup back NOW and let the port linger: boot must not wait out the grace window
+  // (see consent-server.ts), while a late consent tab still needs somewhere to land.
+  closeAfterGrace(handle, opts.graceMs)
 }

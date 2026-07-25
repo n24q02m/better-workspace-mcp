@@ -16,6 +16,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { runHttpServer } from '@n24q02m/mcp-core'
 import { GOOGLE_AUTHORIZE_URL, GOOGLE_TOKEN_URL, SERVER_NAME } from '../constants.js'
 import { emailFromIdToken } from './account-store.js'
+import { closeAfterGrace, closeNow } from './consent-server.js'
 import { getAuth } from './credential-state.js'
 import { WORKSPACE_SCOPES } from './oauth-setup.js'
 import type { GoogleTokens } from './workspace-auth.js'
@@ -35,26 +36,6 @@ export interface AddAccountFlow {
  * abandoned call. After this long the flow closes itself.
  */
 const FLOW_TTL_MS = 10 * 60 * 1000
-
-/**
- * How long the temporary server outlives a SUCCESSFUL consent.
- *
- * A second consent tab is ordinary -- the user clicks the URL twice, the browser
- * prefetches it, they reload the finished page, or another tool opens its own. Each tab
- * runs its own PKCE handshake and comes back to `/callback` with its own code (mcp-core
- * keys pending sessions on a per-tab nonce, so the late one is still valid), which means
- * closing the server the instant the FIRST tab succeeds drops the second onto a dead
- * port. Seen in the field: one tab showing "Setup complete", the other
- * ERR_CONNECTION_REFUSED at 127.0.0.1:<port>/callback -- an error page for a consent
- * that actually worked.
- *
- * Staying up this much longer gives a late tab somewhere to land. What that tab is allowed
- * to do is the other half of this: see `firstConsent` in onTokenReceived -- a late tab for
- * the same account is accepted and writes nothing, a late tab for a different account is
- * refused. A window where any tab could write would trade this error page for a silently
- * added account, which is the worse of the two.
- */
-const CLOSE_GRACE_MS = 10_000
 
 export async function startAddAccount(
   opts: { makePrimary?: boolean; ttlMs?: number; graceMs?: number } = {}
@@ -149,16 +130,6 @@ export async function startAddAccount(
     if (typeof timer.unref === 'function') timer.unref()
   })
 
-  // A close failure is nobody's outcome by the time it happens -- the consent has
-  // already been saved, or already failed on its own -- and this runs on a promise no
-  // caller holds. So say it on stderr rather than raising it into `done` (which would
-  // report a working consent as a failed one) or dropping it into an unhandled rejection.
-  const closeServer = (): void => {
-    void handle.close().catch((err) => {
-      console.error(`[${SERVER_NAME}] failed to close the add-account callback server:`, err)
-    })
-  }
-
   // race, NOT any: whichever settles first wins, so a real onTokenReceived failure
   // surfaces now. Promise.any ignores rejections, which would hide that error behind a
   // "timed out" ten minutes later.
@@ -166,20 +137,17 @@ export async function startAddAccount(
 
   // Shut down on our own schedule instead of through .finally() on `done`: the caller's
   // promise has to settle the moment consent lands -- it is what the tool call reports --
-  // while the port outlives it by CLOSE_GRACE_MS. Attached once, here, so the server
-  // closes once however many places end up awaiting `done`.
+  // while the port outlives it by the grace window. Attached once, here, so the server
+  // closes once however many places end up awaiting `done`. Why the window exists at all:
+  // consent-server.ts.
   done.then(
     () => {
       clearTimeout(timer)
-      const graceTimer = setTimeout(closeServer, opts.graceMs ?? CLOSE_GRACE_MS)
-      // Same reason as the deadline above: a pending close must not hold the process open.
-      if (typeof graceTimer.unref === 'function') graceTimer.unref()
+      closeAfterGrace(handle, opts.graceMs)
     },
     () => {
-      // Timed out, or the tokens could not be stored: nobody is mid-consent, so there is
-      // no late tab worth keeping the port alive for.
       clearTimeout(timer)
-      closeServer()
+      closeNow(handle)
     }
   )
   return { url: `http://${handle.host}:${handle.port}/`, done }
