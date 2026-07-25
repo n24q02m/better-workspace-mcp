@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { randomUUID } from 'node:crypto';
+
 /**
  * Helper class for creating RFC 2822 compliant MIME messages for Gmail API
  */
@@ -150,7 +152,14 @@ export class MimeHelper {
     }>;
     isHtml?: boolean;
   }): string {
-    const boundary = `boundary_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    // Fixed-offset slicing of a base-36 float is not a random suffix: the string
+    // length depends on the value, so `Math.random().toString(36).substring(7)`
+    // is EMPTY whenever the draw stringifies short (0.5 -> "0.i", 0 -> "0").
+    // The boundary then degenerates to `boundary_<ms>_`, and two messages built
+    // in the same millisecond share it -- a duplicated boundary makes the
+    // receiving parser mis-split the parts. 32 hex chars are all valid RFC 2046
+    // bcharsnospace and keep the whole boundary at 55 chars, under the 70 limit.
+    const boundary = `boundary_${Date.now()}_${randomUUID().replace(/-/g, '')}`;
     const utf8Subject = `=?utf-8?B?${Buffer.from(subject).toString('base64')}?=`;
 
     const messageParts: string[] = [];
