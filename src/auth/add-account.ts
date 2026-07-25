@@ -15,6 +15,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { runHttpServer } from '@n24q02m/mcp-core'
 import { GOOGLE_AUTHORIZE_URL, GOOGLE_TOKEN_URL, SERVER_NAME } from '../constants.js'
+import { emailFromIdToken } from './account-store.js'
 import { getAuth } from './credential-state.js'
 import { WORKSPACE_SCOPES } from './oauth-setup.js'
 import type { GoogleTokens } from './workspace-auth.js'
@@ -35,7 +36,29 @@ export interface AddAccountFlow {
  */
 const FLOW_TTL_MS = 10 * 60 * 1000
 
-export async function startAddAccount(opts: { makePrimary?: boolean; ttlMs?: number } = {}): Promise<AddAccountFlow> {
+/**
+ * How long the temporary server outlives a SUCCESSFUL consent.
+ *
+ * A second consent tab is ordinary -- the user clicks the URL twice, the browser
+ * prefetches it, they reload the finished page, or another tool opens its own. Each tab
+ * runs its own PKCE handshake and comes back to `/callback` with its own code (mcp-core
+ * keys pending sessions on a per-tab nonce, so the late one is still valid), which means
+ * closing the server the instant the FIRST tab succeeds drops the second onto a dead
+ * port. Seen in the field: one tab showing "Setup complete", the other
+ * ERR_CONNECTION_REFUSED at 127.0.0.1:<port>/callback -- an error page for a consent
+ * that actually worked.
+ *
+ * Staying up this much longer gives a late tab somewhere to land. What that tab is allowed
+ * to do is the other half of this: see `firstConsent` in onTokenReceived -- a late tab for
+ * the same account is accepted and writes nothing, a late tab for a different account is
+ * refused. A window where any tab could write would trade this error page for a silently
+ * added account, which is the worse of the two.
+ */
+const CLOSE_GRACE_MS = 10_000
+
+export async function startAddAccount(
+  opts: { makePrimary?: boolean; ttlMs?: number; graceMs?: number } = {}
+): Promise<AddAccountFlow> {
   const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID
   const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET
   if (!clientId || !clientSecret) {
@@ -48,6 +71,14 @@ export async function startAddAccount(opts: { makePrimary?: boolean; ttlMs?: num
     resolveDone = res
     rejectDone = rej
   })
+
+  /**
+   * The one consent allowed to write, held as the in-flight promise rather than a flag
+   * set after its `await`. Two tabs redirecting at once -- the very case the grace window
+   * below exists for -- would both find a flag still unset, and two concurrent
+   * `saveTokens` calls race the credential store's write-then-rename into an ENOENT.
+   */
+  let firstConsent: Promise<string> | null = null
 
   // Same McpServer cast as oauth-setup.ts: runHttpServer only ever calls
   // .connect(transport) on the factory result, which a low-level Server satisfies.
@@ -67,16 +98,41 @@ export async function startAddAccount(opts: { makePrimary?: boolean; ttlMs?: num
           authorizeParams: { access_type: 'offline', prompt: 'consent' }
         },
         onTokenReceived: async (tokens) => {
-          try {
-            const email = await getAuth().saveTokens(tokens as unknown as GoogleTokens, {
-              makePrimary: opts.makePrimary
-            })
-            resolveDone(email)
-            return email
-          } catch (err) {
-            rejectDone(err)
-            throw err // let mcp-core surface the failure on the consent page too
+          // One flow adds ONE account. Every consent tab that comes back lands here (see
+          // CLOSE_GRACE_MS), so the first one writes and the rest are checked against it --
+          // otherwise a second tab where the user picked a different identity in Google's
+          // account chooser would be stored silently, and with makePrimary it would take
+          // primary away from the account this flow already reported adding.
+          if (firstConsent === null) {
+            firstConsent = getAuth()
+              .saveTokens(tokens as unknown as GoogleTokens, { makePrimary: opts.makePrimary })
+              .then(
+                (email) => {
+                  resolveDone(email)
+                  return email
+                },
+                (err) => {
+                  rejectDone(err)
+                  throw err // let mcp-core surface the failure on the consent page too
+                }
+              )
+            return firstConsent
           }
+
+          // Whatever the first tab settled on -- rejecting here if it failed, which is
+          // right: the flow is over either way, and a late tab must not revive it.
+          const added = await firstConsent
+          if (emailFromIdToken((tokens as unknown as GoogleTokens).id_token) === added) {
+            // Same account twice: nothing left to write, and re-running makePrimary would
+            // be a second write for a primary that is already set to this very account.
+            return added
+          }
+          // Also the no-email-claim case, where the account cannot be shown to be the same
+          // one -- refusing costs the user one more account_add call, storing the wrong
+          // account costs them a mailbox they never meant to connect.
+          throw new Error(
+            `This add-account flow already completed for ${added}. Call config(action="account_add") again to add a different account.`
+          )
         }
       }
     }
@@ -93,12 +149,38 @@ export async function startAddAccount(opts: { makePrimary?: boolean; ttlMs?: num
     if (typeof timer.unref === 'function') timer.unref()
   })
 
+  // A close failure is nobody's outcome by the time it happens -- the consent has
+  // already been saved, or already failed on its own -- and this runs on a promise no
+  // caller holds. So say it on stderr rather than raising it into `done` (which would
+  // report a working consent as a failed one) or dropping it into an unhandled rejection.
+  const closeServer = (): void => {
+    void handle.close().catch((err) => {
+      console.error(`[${SERVER_NAME}] failed to close the add-account callback server:`, err)
+    })
+  }
+
   // race, NOT any: whichever settles first wins, so a real onTokenReceived failure
   // surfaces now. Promise.any ignores rejections, which would hide that error behind a
   // "timed out" ten minutes later.
-  const done = Promise.race([settled, timeout]).finally(() => {
-    clearTimeout(timer)
-    return handle.close()
-  })
+  const done = Promise.race([settled, timeout])
+
+  // Shut down on our own schedule instead of through .finally() on `done`: the caller's
+  // promise has to settle the moment consent lands -- it is what the tool call reports --
+  // while the port outlives it by CLOSE_GRACE_MS. Attached once, here, so the server
+  // closes once however many places end up awaiting `done`.
+  done.then(
+    () => {
+      clearTimeout(timer)
+      const graceTimer = setTimeout(closeServer, opts.graceMs ?? CLOSE_GRACE_MS)
+      // Same reason as the deadline above: a pending close must not hold the process open.
+      if (typeof graceTimer.unref === 'function') graceTimer.unref()
+    },
+    () => {
+      // Timed out, or the tokens could not be stored: nobody is mid-consent, so there is
+      // no late tab worth keeping the port alive for.
+      clearTimeout(timer)
+      closeServer()
+    }
+  )
   return { url: `http://${handle.host}:${handle.port}/`, done }
 }
