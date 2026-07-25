@@ -31,7 +31,14 @@ export class WorkspaceAuth {
     if (!email) {
       throw new Error('Cannot store Google tokens without an account email (no id_token email claim and none passed).')
     }
-    await this.accounts.put(email, record, { makePrimary: opts.makePrimary })
+    // absorbLegacy: hai caller ngoài (runOAuthSetup, startAddAccount) đều đứng ngay
+    // sau một lần consent người dùng vừa hoàn tất, nên ghi là đúng ý họ -- và nếu
+    // KHÔNG hấp thụ thì một lần adopt thất bại (cần mạng) sẽ khoá người dùng ngoài
+    // server: guard chặn chính lần ghi này, mà setup_reset lại cần server đang chạy.
+    // Caller thứ ba là listener 'tokens' của buildClient (auto-refresh, không phải
+    // consent); đường đó chỉ chạy khi blob v2 đã tồn tại, nên cờ này không tới lượt
+    // được đọc ở đó.
+    await this.accounts.put(email, record, { makePrimary: opts.makePrimary, absorbLegacy: true })
     return email
   }
 

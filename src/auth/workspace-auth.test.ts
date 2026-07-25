@@ -5,6 +5,7 @@ import { PerPluginStore, setHomeDirForTesting } from '@n24q02m/mcp-core/storage'
 import { google } from 'googleapis'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { STORE_PLUGIN } from '../constants.js'
+import { UNIDENTIFIED_ACCOUNT } from './account-store.js'
 import { WorkspaceAuth } from './workspace-auth.js'
 
 // id_token chỉ được đọc phần payload, không xác thực chữ ký -- JWT giả là đủ.
@@ -228,6 +229,32 @@ describe('WorkspaceAuth', () => {
     await expect(auth.getAuthenticatedClient()).rejects.toThrow(/account_add|re-authorize/i)
     // token cũ KHÔNG bị xoá
     expect(await new PerPluginStore(STORE_PLUGIN).load()).not.toBeNull()
+    await auth.clear()
+  })
+
+  it('lets a fresh consent complete even while an unadoptable legacy blob is on disk', async () => {
+    // Chuỗi deadlock: adopt thất bại (cần mạng) -> state về awaiting_setup -> server
+    // mở OAuth -> người dùng consent xong -> lần ghi ĐÓ bị guard chặn -> startup fail,
+    // và setup_reset thì cần server đang chạy. saveTokens phải đi qua được trạng thái này.
+    await new PerPluginStore(STORE_PLUGIN).save({ access_token: 'legacy-at', refresh_token: 'legacy-rt' })
+    const auth = new WorkspaceAuth(['openid'])
+
+    const email = await auth.saveTokens(
+      { access_token: 'fresh-at', refresh_token: 'fresh-rt' },
+      {
+        email: 'fresh@example.com'
+      }
+    )
+
+    expect(email).toBe('fresh@example.com')
+    const { accounts, primary } = await auth.listAccounts()
+    expect(accounts).toEqual([UNIDENTIFIED_ACCOUNT, 'fresh@example.com'])
+    expect(primary).toBe('fresh@example.com')
+    // Server dùng được ngay: client mặc định là account vừa consent.
+    const client = await auth.getAuthenticatedClient()
+    expect(client.credentials.access_token).toBe('fresh-at')
+    // Và blob cũ không bị mất -- xoá được bằng account_remove.
+    expect((await auth.removeAccount(UNIDENTIFIED_ACCOUNT)).removed).toBe(true)
     await auth.clear()
   })
 

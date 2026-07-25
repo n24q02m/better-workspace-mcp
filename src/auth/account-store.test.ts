@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { PerPluginStore, setHomeDirForTesting } from '@n24q02m/mcp-core/storage'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { STORE_PLUGIN } from '../constants.js'
-import { AccountStore, emailFromIdToken, isLegacyBlob } from './account-store.js'
+import { AccountStore, emailFromIdToken, isLegacyBlob, UNIDENTIFIED_ACCOUNT } from './account-store.js'
 
 // id_token là JWT không cần chữ ký hợp lệ ở đây: chỉ payload được đọc.
 function fakeIdToken(claims: Record<string, unknown>): string {
@@ -142,6 +142,58 @@ describe('AccountStore', () => {
     // Token cũ còn nguyên, không bị ghi đè.
     expect((await store.loadLegacy())?.access_token).toBe('legacy-at')
     expect((await store.loadLegacy())?.refresh_token).toBe('legacy-rt')
+  })
+
+  describe('absorbLegacy', () => {
+    it('absorbs an unidentified legacy blob instead of deadlocking the next consent', async () => {
+      await new PerPluginStore(STORE_PLUGIN).save({ access_token: 'legacy-at', refresh_token: 'legacy-rt' })
+      const store = new AccountStore()
+
+      await store.put('new@example.com', REC, { absorbLegacy: true })
+
+      const { accounts, primary } = await store.list()
+      expect(accounts).toContain('new@example.com')
+      expect(accounts).toContain(UNIDENTIFIED_ACCOUNT)
+      expect(primary).toBe('new@example.com')
+      // token cũ vẫn còn, xoá được bằng account_remove
+      expect((await store.get(UNIDENTIFIED_ACCOUNT))?.record.refresh_token).toBe('legacy-rt')
+    })
+
+    it('still refuses when the caller did not just complete a consent', async () => {
+      await new PerPluginStore(STORE_PLUGIN).save({ access_token: 'legacy-at' })
+      const store = new AccountStore()
+      await expect(store.put('new@example.com', REC)).rejects.toThrow(/older single-account layout/i)
+    })
+
+    it('lets account_remove clear the absorbed blob, leaving the real account alone', async () => {
+      await new PerPluginStore(STORE_PLUGIN).save({ access_token: 'legacy-at', refresh_token: 'legacy-rt' })
+      const store = new AccountStore()
+      await store.put('new@example.com', REC, { absorbLegacy: true })
+
+      expect(await store.remove(UNIDENTIFIED_ACCOUNT)).toEqual({ removed: true, newPrimary: 'new@example.com' })
+      expect(await store.list()).toEqual({ accounts: ['new@example.com'], primary: 'new@example.com' })
+    })
+
+    it('promotes a real account over the unidentified blob when the primary is removed', async () => {
+      // (unidentified) là credential không biết của ai và thường đã hết hiệu lực.
+      // Để nó lên primary là âm thầm đưa mọi lời gọi không truyền `account` sang
+      // một mailbox không xác định.
+      await new PerPluginStore(STORE_PLUGIN).save({ access_token: 'legacy-at', refresh_token: 'legacy-rt' })
+      const store = new AccountStore()
+      await store.put('first@example.com', REC, { absorbLegacy: true })
+      await store.put('second@example.com', REC)
+
+      expect(await store.remove('first@example.com')).toEqual({ removed: true, newPrimary: 'second@example.com' })
+      expect((await store.list()).primary).toBe('second@example.com')
+    })
+
+    it('falls back to the unidentified blob only when nothing else is left', async () => {
+      await new PerPluginStore(STORE_PLUGIN).save({ access_token: 'legacy-at', refresh_token: 'legacy-rt' })
+      const store = new AccountStore()
+      await store.put('only@example.com', REC, { absorbLegacy: true })
+
+      expect(await store.remove('only@example.com')).toEqual({ removed: true, newPrimary: UNIDENTIFIED_ACCOUNT })
+    })
   })
 
   describe('adoptLegacy', () => {

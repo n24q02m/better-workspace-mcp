@@ -42,6 +42,13 @@ export function isLegacyBlob(raw: Record<string, unknown> | null): boolean {
   return raw !== null && raw.version === undefined && typeof raw.access_token === 'string'
 }
 
+/**
+ * Key giữ blob M1 không xác định được chủ, thay vì xoá nó đi. Không phải email
+ * nên không đụng vào không gian tên account thật, và vẫn hiện ra ở
+ * `account_list` để người dùng xoá được bằng `account_remove`.
+ */
+export const UNIDENTIFIED_ACCOUNT = '(unidentified)'
+
 const normalize = (email: string) => email.trim().toLowerCase()
 
 export class AccountStore {
@@ -99,9 +106,18 @@ export class AccountStore {
     return legacy
   }
 
-  async put(email: string, record: AccountRecord, opts: { makePrimary?: boolean } = {}): Promise<void> {
+  /**
+   * `absorbLegacy` dành cho caller đứng ngay sau một lần consent người dùng vừa
+   * hoàn tất. Không có cờ đó, một blob M1 chưa nhận về sẽ khiến `put` từ chối.
+   */
+  async put(
+    email: string,
+    record: AccountRecord,
+    opts: { makePrimary?: boolean; absorbLegacy?: boolean } = {}
+  ): Promise<void> {
     const key = normalize(email)
     const existing = await this.load()
+    let carried: Record<string, AccountRecord> = {}
     if (!existing) {
       // load() trả null cho CẢ "chưa có gì" lẫn "có blob M1 nhưng chưa nhận về
       // được". Ghi đè ở trường hợp thứ hai sẽ xoá refresh_token của người dùng,
@@ -110,12 +126,19 @@ export class AccountStore {
       // động bỏ nó bằng config(action="setup_reset").
       const legacy = await this.loadLegacy()
       if (legacy) {
-        throw new Error(
-          'Refusing to overwrite credentials stored in the older single-account layout. Adopt them first, or clear them deliberately with config(action="setup_reset") before adding a new account.'
-        )
+        if (!opts.absorbLegacy) {
+          throw new Error(
+            'Refusing to overwrite credentials stored in the older single-account layout. Adopt them first, or clear them deliberately with config(action="setup_reset") before adding a new account.'
+          )
+        }
+        // Người dùng vừa hoàn tất consent, nên ghi là đúng ý họ -- nhưng vẫn không
+        // xoá blob cũ: giữ nó dưới UNIDENTIFIED_ACCOUNT để account_list thấy được và
+        // account_remove xoá được. Chặn ở đây thay vì hấp thụ sẽ làm startup không
+        // thoát được: guard chặn chính lần ghi đó, mà setup_reset lại cần server đang chạy.
+        carried = { [UNIDENTIFIED_ACCOUNT]: legacy }
       }
     }
-    const base = existing ?? { version: 2 as const, accounts: {}, primary: key }
+    const base = existing ?? { version: 2 as const, accounts: carried, primary: key }
     const accounts = { ...base.accounts, [key]: record }
     const primary = opts.makePrimary || !base.accounts[base.primary] ? key : base.primary
     await this.store.save({ version: 2, accounts, primary } as unknown as Record<string, unknown>)
@@ -148,7 +171,12 @@ export class AccountStore {
       await this.store.clear()
       return { removed: true, newPrimary: null }
     }
-    const primary = blob.primary === key ? (remaining[0] as string) : blob.primary
+    // Đề account khác lên trước UNIDENTIFIED_ACCOUNT: nó là credential không biết
+    // của ai, thường đã hết hiệu lực. Để nó thành primary là âm thầm đưa mọi lời
+    // gọi không truyền `account` sang một mailbox không xác định -- đúng cái mà
+    // "account lạ = lỗi, không rơi về primary" tồn tại để tránh.
+    const promoted = remaining.find((k) => k !== UNIDENTIFIED_ACCOUNT) ?? (remaining[0] as string)
+    const primary = blob.primary === key ? promoted : blob.primary
     await this.store.save({ version: 2, accounts, primary } as unknown as Record<string, unknown>)
     return { removed: true, newPrimary: primary }
   }
