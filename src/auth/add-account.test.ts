@@ -88,6 +88,63 @@ describe('startAddAccount', () => {
     await drainGrace()
   })
 
+  it('accepts a late tab that consented as the SAME account, without writing twice', async () => {
+    const flow = await startAddAccount({ graceMs: GRACE_MS })
+    await capturedOnToken?.({ access_token: 'at-1', id_token: idToken('same@example.com') })
+    expect(await flow.done).toBe('same@example.com')
+
+    // Second tab, still inside the grace window, same Google account.
+    await expect(capturedOnToken?.({ access_token: 'at-2', id_token: idToken('same@example.com') })).resolves.toBe(
+      'same@example.com'
+    )
+
+    const { accounts } = await getAuth().listAccounts()
+    expect(accounts).toEqual(['same@example.com'])
+    await drainGrace()
+  })
+
+  it('refuses a late tab that consented as a DIFFERENT account instead of silently adding it', async () => {
+    const flow = await startAddAccount({ graceMs: GRACE_MS })
+    await capturedOnToken?.({ access_token: 'at-a', id_token: idToken('a@example.com') })
+    expect(await flow.done).toBe('a@example.com')
+
+    // The user picked another identity in Google's account chooser on the second tab.
+    await expect(capturedOnToken?.({ access_token: 'at-b', id_token: idToken('b@example.com') })).rejects.toThrow(
+      /a@example\.com/
+    )
+
+    const { accounts } = await getAuth().listAccounts()
+    expect(accounts).toEqual(['a@example.com'])
+    expect(accounts).not.toContain('b@example.com')
+    await drainGrace()
+  })
+
+  it('does not let a late tab steal primary', async () => {
+    const flow = await startAddAccount({ makePrimary: true, graceMs: GRACE_MS })
+    await capturedOnToken?.({ access_token: 'at-a', id_token: idToken('a@example.com') })
+    await flow.done
+
+    await expect(capturedOnToken?.({ access_token: 'at-b', id_token: idToken('b@example.com') })).rejects.toThrow()
+
+    expect((await getAuth().listAccounts()).primary).toBe('a@example.com')
+    await drainGrace()
+  })
+
+  it('lets only the first of two SIMULTANEOUS tabs write, before either save finishes', async () => {
+    // The prefetch case: both callbacks start before the first save resolves, so a flag
+    // set after the await would still be null for the second one.
+    const flow = await startAddAccount({ graceMs: GRACE_MS })
+    const first = capturedOnToken?.({ access_token: 'at-a', id_token: idToken('a@example.com') })
+    const second = capturedOnToken?.({ access_token: 'at-b', id_token: idToken('b@example.com') })
+
+    await expect(first).resolves.toBe('a@example.com')
+    await expect(second).rejects.toThrow(/a@example\.com/)
+
+    expect((await getAuth().listAccounts()).accounts).toEqual(['a@example.com'])
+    expect(await flow.done).toBe('a@example.com')
+    await drainGrace()
+  })
+
   it('holds the port for ten seconds by default, which is what ships', async () => {
     vi.useFakeTimers()
     try {
