@@ -1,0 +1,14 @@
+# Ghi đè core.autocrlf của máy dev (máy Windows ở đây có autocrlf=true ở cả system
+# gitconfig lẫn .git/config). Không có file này, checkout ra CRLF trong khi index là
+# LF, nên `bun run check` luôn đỏ trên Windows với hàng chục lỗi format mà CI Linux
+# lại xanh -- và bất kỳ tool nào ghi lại file rồi commit sẽ tạo diff giả hàng nghìn
+# dòng, làm src/vendored/** mất trạng thái byte-identical với upstream (xem NOTICE).
+* text=auto eol=lf
+
+# Nhị phân: đừng để git đoán rồi làm hỏng nội dung.
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.db binary
