@@ -60,7 +60,7 @@ const VALID_HELP_TOPICS_STRING = HELP_TOPICS.join(', ')
 /**
  * A domain's mega-tool definition, derived from its DomainDef -- action enum
  * comes from `actions`, extra params from `inputProps`, and `account` is
- * appended for every domain (accepted, ignored in M1 single-account mode).
+ * appended for every domain (selects which Google account the call acts as).
  */
 function domainToolDef(domain: DomainDef) {
   return {
@@ -77,7 +77,10 @@ function domainToolDef(domain: DomainDef) {
       type: 'object',
       properties: {
         action: { type: 'string', enum: [...domain.actions], description: 'Action to perform' },
-        account: { type: 'string', description: 'Account identifier (accepted, ignored in M1 single-account mode)' },
+        account: {
+          type: 'string',
+          description: 'Google account email to act as. Defaults to the primary account (config action="account_list").'
+        },
         ...domain.inputProps
       },
       required: ['action']

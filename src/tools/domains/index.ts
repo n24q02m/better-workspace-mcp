@@ -31,7 +31,7 @@ export const DOMAINS: DomainDef[] = [
   {
     name: 'docs',
     description:
-      'Google Docs operations.\n\nActions (required params -> optional):\n- getText (documentId -> tabId)\n- create (title -> content)\n- writeText (documentId, text -> position, tabId)\n- getSuggestions (documentId)\n- replaceText (documentId, findText, replaceText -> tabId)\n- formatText (documentId, formats -> tabId)\n\naccount is accepted but IGNORED in M1 (single-account; M2 wires per-account auth).',
+      'Google Docs operations.\n\nActions (required params -> optional):\n- getText (documentId -> tabId)\n- create (title -> content)\n- writeText (documentId, text -> position, tabId)\n- getSuggestions (documentId)\n- replaceText (documentId, findText, replaceText -> tabId)\n- formatText (documentId, formats -> tabId)\n\naccount = email of the Google account to use (default: primary).',
     actions: DOCS_ACTIONS,
     inputProps: {
       documentId: { type: 'string', description: 'Google Doc ID or URL' },
@@ -72,7 +72,10 @@ export const DOMAINS: DomainDef[] = [
   },
   {
     name: 'drive',
-    description: 'Drive operations. Actions: ' + DRIVE_ACTIONS.join(', ') + '. account accepted (M1 ignored).',
+    description:
+      'Drive operations. Actions: ' +
+      DRIVE_ACTIONS.join(', ') +
+      '. account = email of the Google account to use (default: primary).',
     actions: DRIVE_ACTIONS,
     inputProps: {
       fileId: { type: 'string' },
@@ -88,7 +91,10 @@ export const DOMAINS: DomainDef[] = [
   },
   {
     name: 'calendar',
-    description: 'Calendar operations. Actions: ' + CALENDAR_ACTIONS.join(', ') + '. account accepted (M1 ignored).',
+    description:
+      'Calendar operations. Actions: ' +
+      CALENDAR_ACTIONS.join(', ') +
+      '. account = email of the Google account to use (default: primary).',
     actions: CALENDAR_ACTIONS,
     inputProps: {
       calendarId: { type: 'string' },
@@ -103,7 +109,10 @@ export const DOMAINS: DomainDef[] = [
   },
   {
     name: 'chat',
-    description: 'Chat operations. Actions: ' + CHAT_ACTIONS.join(', ') + '. account accepted (M1 ignored).',
+    description:
+      'Chat operations. Actions: ' +
+      CHAT_ACTIONS.join(', ') +
+      '. account = email of the Google account to use (default: primary).',
     actions: CHAT_ACTIONS,
     inputProps: {
       spaceId: { type: 'string' },
@@ -116,7 +125,10 @@ export const DOMAINS: DomainDef[] = [
   },
   {
     name: 'gmail',
-    description: 'Gmail operations. Actions: ' + GMAIL_ACTIONS.join(', ') + '. account accepted (M1 ignored).',
+    description:
+      'Gmail operations. Actions: ' +
+      GMAIL_ACTIONS.join(', ') +
+      '. account = email of the Google account to use (default: primary).',
     actions: GMAIL_ACTIONS,
     inputProps: {
       query: { type: 'string' },
@@ -132,7 +144,10 @@ export const DOMAINS: DomainDef[] = [
   },
   {
     name: 'slides',
-    description: 'Slides operations. Actions: ' + SLIDES_ACTIONS.join(', ') + '. account accepted (M1 ignored).',
+    description:
+      'Slides operations. Actions: ' +
+      SLIDES_ACTIONS.join(', ') +
+      '. account = email of the Google account to use (default: primary).',
     actions: SLIDES_ACTIONS,
     inputProps: {
       presentationId: { type: 'string' },
@@ -144,7 +159,10 @@ export const DOMAINS: DomainDef[] = [
   },
   {
     name: 'sheets',
-    description: 'Sheets operations. Actions: ' + SHEETS_ACTIONS.join(', ') + '. account accepted (M1 ignored).',
+    description:
+      'Sheets operations. Actions: ' +
+      SHEETS_ACTIONS.join(', ') +
+      '. account = email of the Google account to use (default: primary).',
     actions: SHEETS_ACTIONS,
     inputProps: {
       spreadsheetId: { type: 'string' },
@@ -154,7 +172,10 @@ export const DOMAINS: DomainDef[] = [
   },
   {
     name: 'tasks',
-    description: 'Tasks operations. Actions: ' + TASKS_ACTIONS.join(', ') + '. account accepted (M1 ignored).',
+    description:
+      'Tasks operations. Actions: ' +
+      TASKS_ACTIONS.join(', ') +
+      '. account = email of the Google account to use (default: primary).',
     actions: TASKS_ACTIONS,
     inputProps: {
       taskListId: { type: 'string' },
@@ -167,7 +188,10 @@ export const DOMAINS: DomainDef[] = [
   },
   {
     name: 'people',
-    description: 'People operations. Actions: ' + PEOPLE_ACTIONS.join(', ') + '. account accepted (M1 ignored).',
+    description:
+      'People operations. Actions: ' +
+      PEOPLE_ACTIONS.join(', ') +
+      '. account = email of the Google account to use (default: primary).',
     actions: PEOPLE_ACTIONS,
     inputProps: {
       resourceName: { type: 'string' }

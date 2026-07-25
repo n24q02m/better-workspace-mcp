@@ -5,6 +5,7 @@
  * domain hand-rolling it (see docs.ts before this refactor).
  */
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
+import { runWithAccount } from '../../auth/account-context.js'
 import { BASE_SCOPES } from '../../constants.js'
 import { AuthManager } from '../../vendored/auth/AuthManager.js'
 import { WorkspaceMCPError, withErrorHandling } from '../helpers/errors.js'
@@ -44,10 +45,12 @@ export function makeDomainRun(
           `Valid actions: ${actions.join(', ')}`
         )
       }
-      // account is accepted but ignored in M1 (single-account; M2 wires per-account auth).
-      void account
       const method = (svc as unknown as Record<string, ServiceMethod>)[action]
-      return method(params)
+      // The vendored service is a singleton built at module load, and upstream's
+      // getAuthenticatedClient() takes no arguments, so the account cannot ride
+      // down as a parameter without editing vendored code. It travels in
+      // AsyncLocalStorage instead; the AuthManager shim reads it back out.
+      return runWithAccount(account, () => method(params))
     })()
   }
 }

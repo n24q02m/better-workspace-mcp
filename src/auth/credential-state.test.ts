@@ -1,8 +1,9 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { setHomeDirForTesting } from '@n24q02m/mcp-core/storage'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { PerPluginStore, setHomeDirForTesting } from '@n24q02m/mcp-core/storage'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { STORE_PLUGIN } from '../constants.js'
 import { getAuth, getState, resetState, resolveCredentialState } from './credential-state.js'
 
 describe('credential-state', () => {
@@ -16,6 +17,7 @@ describe('credential-state', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     setHomeDirForTesting(null)
     rmSync(testHomeDir, { recursive: true, force: true })
   })
@@ -39,5 +41,43 @@ describe('credential-state', () => {
     // exercising resolveCredentialState()'s catch branch.
     expect(await resolveCredentialState()).toBe('awaiting_setup')
     expect(getState()).toBe('awaiting_setup')
+  })
+
+  it('reports configured when at least one account exists', async () => {
+    const auth = getAuth()
+    await auth.saveTokens({ access_token: 'at' }, { email: 'a@example.com' })
+    expect(await resolveCredentialState()).toBe('configured')
+    await auth.clear()
+    expect(await resolveCredentialState()).toBe('awaiting_setup')
+  })
+
+  it('answers from the account list alone, without building a client', async () => {
+    // Building a client is what can reach the network (the legacy-adoption
+    // probe). With accounts on disk there is nothing to probe, so the state
+    // must be decided from the list -- otherwise `config(action="status")`
+    // pays a Google round-trip on every call.
+    const auth = getAuth()
+    await auth.saveTokens({ access_token: 'at' }, { email: 'a@example.com' })
+    const spy = vi.spyOn(auth, 'getAuthenticatedClient')
+
+    expect(await resolveCredentialState()).toBe('configured')
+
+    expect(spy).not.toHaveBeenCalled()
+    await auth.clear()
+  })
+
+  it('still reports configured for an unadopted legacy blob', async () => {
+    // Flat M1 blob with no derivable email: listAccounts() is empty, so the
+    // state falls back to asking getAuthenticatedClient(), which adopts it.
+    await new PerPluginStore(STORE_PLUGIN).save({ access_token: 'legacy-at' })
+    const auth = getAuth()
+    vi.spyOn(
+      auth as unknown as { fetchAccountEmail: (client: unknown) => Promise<string | undefined> },
+      'fetchAccountEmail'
+    ).mockResolvedValue('adopted@example.com')
+
+    expect(await resolveCredentialState()).toBe('configured')
+    expect((await auth.listAccounts()).accounts).toEqual(['adopted@example.com'])
+    await auth.clear()
   })
 })

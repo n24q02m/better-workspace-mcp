@@ -14,6 +14,14 @@ export function getAuth(): WorkspaceAuth {
 }
 
 export async function resolveCredentialState(): Promise<CredentialState> {
+  const { accounts } = await _auth.listAccounts()
+  if (accounts.length > 0) {
+    _state = 'configured'
+    return _state
+  }
+  // Blob phẳng M1 vẫn tính là đã cấu hình: getAuthenticatedClient() sẽ nhận nó
+  // về (hỏi Google lấy email) ở lần dùng đầu tiên. Chỉ tới đây mới dựng client,
+  // vì đó là đường duy nhất có thể phải gọi mạng.
   try {
     await _auth.getAuthenticatedClient()
     _state = 'configured'
