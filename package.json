@@ -13,7 +13,7 @@
     "test:coverage": "vitest --coverage",
     "lint": "biome lint src",
     "format": "biome format --write .",
-    "type-check": "tsc --noEmit",
+    "type-check": "tsc --noEmit && tsc --noEmit -p tsconfig.worker.json",
     "check": "biome check . && bun run type-check",
     "check:fix": "biome check --write . && bun run type-check",
     "prepublishOnly": "bun run build"
@@ -35,6 +35,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.2",
+    "@cloudflare/containers": "^0.3.7",
+    "@cloudflare/workers-types": "^5.20260705.1",
     "@types/node": "^26.1.0",
     "@vitest/coverage-v8": "^4.1.9",
     "esbuild": "^0.28.1",

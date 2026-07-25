@@ -7,6 +7,11 @@
 // `types: ["node"]` for the rest of the server (which uses node globals), and
 // excludes src/worker.ts, so this file type-checks the worker in isolation with
 // the workers type set. Both run in the `type-check` script.
+//
+// The worker test lives in tests/, not src/, for the same reason: tsconfig.json
+// `include`s src/**/*.ts, and `exclude` does NOT stop a file from being checked
+// once an included file imports it -- a test at src/worker.test.ts would pull
+// src/worker.ts back into the node-typed pass and fail on `cloudflare:workers`.
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {

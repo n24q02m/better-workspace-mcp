@@ -37,7 +37,7 @@ bun run build       # tsc -build + scripts/build-cli.js -> bin/cli.mjs
 ## Cau hinh
 
 - License: Apache-2.0 (repo nay vendor code Apache-2.0, khac voi MIT cua cac MCP server khac trong stack).
-- `type-check` script chi chay `tsc --noEmit` (bo `-p tsconfig.worker.json`) vi `src/worker.ts` chua ton tai (M3 HTTP/CF). Khoi phuc `&& tsc --noEmit -p tsconfig.worker.json` khi worker.ts duoc tao o M3.
+- `type-check` chay CA HAI pass: `tsc --noEmit` (server, types node) va `tsc --noEmit -p tsconfig.worker.json` (`src/worker.ts`, types `@cloudflare/workers-types`). `tsconfig.json` `exclude` worker.ts khoi pass dau. Luu y: `exclude` KHONG chan mot file bi check khi file trong `include` import no — nen test cua worker phai nam o `tests/worker.test.ts`, KHONG phai `src/worker.test.ts` (dat trong `src/` se keo worker.ts nguoc vao pass node-typed va fail o `cloudflare:workers`).
 - Test surface: 211 test / 19 file = unit + component + 2 hermetic protocol E2E (`tests/protocol/m1-stdio.test.ts`, `tests/protocol/m2-multi-account.test.ts` — stdio_client spawn bin/cli.mjs, seeded token, no real network). Real-Google smoke = thu cong (manual, ngoai CI — can OAuth client + consent). Smoke 2 account cua M2 DA CHAY 2026-07-25, 6/6 buoc PASS: M1 flat blob -> v2 adopt offline giu nguyen `refresh_token`; account thu 2 them qua `account_add`; `getMe` tra 2 danh tinh khac nhau; `drive.search` tra data khac nhau theo account; account la truyen vao bi tu choi DUNG TEN (khong am tham fallback ve primary); force-expire refresh chi cap nhat account B, token account A byte-identical. Chi tiet + cach tai hien: `.private/superpower/better-workspace-mcp/m2-task9-live-smoke-2026-07-25.md`.
 
 ## Dependency dac biet
