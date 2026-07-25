@@ -71,7 +71,10 @@ describe('M2 multi-account protocol E2E', () => {
     await client.connect(
       new StdioClientTransport({ command: process.execPath, args: [CLI_PATH], cwd: REPO_ROOT, env: childEnv })
     )
-  }, 30_000)
+    // 90s như m1-stdio: hook spawn `bin/cli.mjs` thật, đo trên máy rảnh ~25s
+    // (chạy riêng: 26.7s), nên ngân sách 30s chỉ còn biên 5s và đỏ theo tải máy
+    // chứ không theo code. Xem comment dài hơn ở m1-stdio.test.ts.
+  }, 90_000)
 
   afterAll(async () => {
     await client?.close()

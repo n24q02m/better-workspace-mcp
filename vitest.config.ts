@@ -2,7 +2,11 @@ import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   test: {
-    exclude: ['build/**', 'node_modules/**', 'bin/**', 'tests/live/**', 'tests/e2e*'],
+    // `.worktrees/**`: git worktree của repo này nằm trong chính repo, nên một
+    // lần chạy từ gốc sẽ quét cả test của mọi branch đang mở ở worktree khác --
+    // đo thật: 453 file / 4783 test / 428s thay vì 21 file, và kết quả gate
+    // trộn code của branch khác vào.
+    exclude: ['build/**', 'node_modules/**', 'bin/**', 'tests/live/**', 'tests/e2e*', '.worktrees/**'],
     coverage: {
       reporter: ['text', 'lcov'],
       reportsDirectory: './coverage',

@@ -104,7 +104,13 @@ describe('M1 stdio protocol E2E', () => {
       env: childEnv
     })
     await client.connect(transport)
-  }, 30_000)
+    // 90s, không phải 30s: hook này spawn `bin/cli.mjs` THẬT rồi bắt tay MCP, nên
+    // chi phí là tốc độ máy (nạp bundle có googleapis) chứ không phải logic. Đo
+    // trên máy rảnh: ~25s. Ngân sách 30s = biên 5s, tức flaky theo CẤU TRÚC chứ
+    // không theo may mắn -- nó đỏ khi runner chậm hoặc khi máy đang chạy việc
+    // khác, và lần đỏ đó không nói gì về code. 90s cho biên ~3.5x mà vẫn báo lỗi
+    // trong thời gian người xem chấp nhận được nếu handshake treo thật.
+  }, 90_000)
 
   afterAll(async () => {
     await client?.close()
