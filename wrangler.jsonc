@@ -1,0 +1,80 @@
+// wrangler.jsonc - better-workspace-mcp Cloudflare Worker + Container + KV.
+//
+// This committed file carries PLACEHOLDERS for every account-specific value
+// (account id, KV namespace id, public URL, custom domain). The real values go
+// in wrangler.deploy.jsonc, which is gitignored and generated at deploy time --
+// so a live namespace id never lands in the repo, and a stray `wrangler deploy`
+// against this file fails loudly instead of half-deploying somewhere real.
+//
+// workspace is KV-only: no D1 (no docs DB) and no Vectorize (no embeddings)
+// blocks, unlike the wet template this is copied from.
+{
+  "name": "better-workspace-mcp-worker",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-06-14",
+  "compatibility_flags": ["nodejs_compat"],
+  "containers": [
+    {
+      "name": "better-workspace-mcp-worker",
+      "class_name": "WorkspaceContainer",
+      // CF Containers pull ONLY from the Cloudflare managed registry (an external
+      // ghcr.io ref fails IMAGE_REGISTRY_NOT_CONFIGURED). Push the pre-built http
+      // image first: `docker pull ghcr.io/n24q02m/better-workspace-mcp:beta &&
+      // docker tag ... better-workspace-mcp:beta && wrangler containers push
+      // better-workspace-mcp:beta`, then fill <YOUR_ACCOUNT_ID>. Re-pushing the
+      // same tag does NOT roll a running instance -- wrangler diffs the tag
+      // string, not the digest; force it with the containers rollouts API.
+      "image": "registry.cloudflare.com/<YOUR_ACCOUNT_ID>/better-workspace-mcp:beta",
+      // 1 GiB. NOT the 256 MiB `dev` tier: every vendored service is constructed
+      // eagerly at module load (tools/domains/factory.ts) and each one pulls a
+      // generated googleapis API surface (the package is ~200 MB on disk), so all
+      // ten -- docs, drive, calendar, chat, gmail, slides, sheets, tasks, people --
+      // are resident before the first request. Drive media upload/download buffers
+      // on top of that. Revisit downward only against measured RSS from a live
+      // deploy, never upward "to be safe": memory is the bill.
+      "instance_type": "basic",
+      // Solo-dev hard cap. The default (100) and the next-trajectory value (10)
+      // are both how the 2026-06 CF bill ran 189% over budget. It also bounds the
+      // silent per-sub DO multiplier -- though src/worker.ts collapses every
+      // request onto a single DO precisely so this cap cannot deadlock the
+      // OAuth handshake. Raise only with a measured multi-user request graph.
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "WORKSPACE", "class_name": "WorkspaceContainer" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["WorkspaceContainer"] }],
+  "kv_namespaces": [{ "binding": "KV", "id": "<better-workspace-kv-namespace-id>" }],
+  // Non-secret container config (forwarded into the container by
+  // WorkspaceContainer.envVars). Secrets via `wrangler secret put`:
+  //   CREDENTIAL_SECRET             -> per-sub credential keys + JWTIssuer EdDSA (no disk)
+  //   MCP_RELAY_PASSWORD            -> Gate A, the shared relay-password front door
+  //   GOOGLE_OAUTH_WEB_CLIENT_ID    -> the WEB OAuth client, not the Desktop one
+  //   GOOGLE_OAUTH_WEB_CLIENT_SECRET
+  //
+  // The _WEB_ names are deliberate and must match the skret key names: stdio uses
+  // a Desktop client (loopback redirect) and this deploy uses a Web client
+  // (pre-registered redirect URIs). src/worker.ts renames them to the plain
+  // GOOGLE_OAUTH_CLIENT_ID/_SECRET the server reads -- see CONTAINER_ENV_SOURCES.
+  //
+  // MCP_AUTH_DISABLE is intentionally ABSENT and must stay absent: it would make
+  // mcp-core issue anonymous claims with no `sub`, collapsing every user into one
+  // credential bucket. Never set an auth-bypass flag on this infra.
+  "vars": {
+    "MCP_TRANSPORT": "http",
+    "PORT": "8080",
+    // mcp-core binds 127.0.0.1 by default; the CF container is only reachable
+    // when the http server binds 0.0.0.0:8080. Without HOST the container "is
+    // not listening in the TCP address 10.0.0.1:8080".
+    "HOST": "0.0.0.0",
+    // Must be the exact public origin. mcp-core falls back to the Host header
+    // when this is unset, which yields an http:// issuer and a redirect_uri that
+    // no registered Web-client URI matches -> Google 400 redirect_uri_mismatch.
+    "PUBLIC_URL": "<YOUR_PUBLIC_URL>",
+    "MCP_STORAGE_BACKEND": "cf-kv",
+    "MCP_KV_BASE_URL": "http://kv.internal"
+  },
+  "routes": [{ "pattern": "<YOUR_WORKER_DOMAIN>", "custom_domain": true }],
+  "observability": { "enabled": true }
+}
