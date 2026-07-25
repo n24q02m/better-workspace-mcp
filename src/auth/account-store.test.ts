@@ -131,4 +131,16 @@ describe('AccountStore', () => {
     expect((await store.loadLegacy())?.access_token).toBe('at')
     expect(isLegacyBlob(await new PerPluginStore(STORE_PLUGIN).load())).toBe(true)
   })
+
+  it('refuses to overwrite an unadopted legacy blob instead of losing its tokens', async () => {
+    // Blob phẳng M1 không có id_token -> load() trả null, nhưng dữ liệu vẫn ở đó.
+    await new PerPluginStore(STORE_PLUGIN).save({ access_token: 'legacy-at', refresh_token: 'legacy-rt' })
+    const store = new AccountStore()
+
+    await expect(store.put('new@example.com', REC)).rejects.toThrow(/older single-account layout/i)
+
+    // Token cũ còn nguyên, không bị ghi đè.
+    expect((await store.loadLegacy())?.access_token).toBe('legacy-at')
+    expect((await store.loadLegacy())?.refresh_token).toBe('legacy-rt')
+  })
 })

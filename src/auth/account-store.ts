@@ -76,9 +76,23 @@ export class AccountStore {
 
   async put(email: string, record: AccountRecord, opts: { makePrimary?: boolean } = {}): Promise<void> {
     const key = normalize(email)
-    const existing = (await this.load()) ?? { version: 2 as const, accounts: {}, primary: key }
-    const accounts = { ...existing.accounts, [key]: record }
-    const primary = opts.makePrimary || !existing.accounts[existing.primary] ? key : existing.primary
+    const existing = await this.load()
+    if (!existing) {
+      // load() trả null cho CẢ "chưa có gì" lẫn "có blob M1 nhưng chưa nhận về
+      // được". Ghi đè ở trường hợp thứ hai sẽ xoá refresh_token của người dùng,
+      // nên dừng lại thật to thay vì mất dữ liệu: caller nhận blob cũ về trước
+      // (WorkspaceAuth.getAuthenticatedClient làm việc đó), hoặc người dùng chủ
+      // động bỏ nó bằng config(action="setup_reset").
+      const legacy = await this.loadLegacy()
+      if (legacy) {
+        throw new Error(
+          'Refusing to overwrite credentials stored in the older single-account layout. Adopt them first, or clear them deliberately with config(action="setup_reset") before adding a new account.'
+        )
+      }
+    }
+    const base = existing ?? { version: 2 as const, accounts: {}, primary: key }
+    const accounts = { ...base.accounts, [key]: record }
+    const primary = opts.makePrimary || !base.accounts[base.primary] ? key : base.primary
     await this.store.save({ version: 2, accounts, primary } as unknown as Record<string, unknown>)
   }
 
