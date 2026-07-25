@@ -9,6 +9,8 @@ vi.mock('./auth/credential-state.js', () => ({
 }))
 vi.mock('./auth/oauth-setup.js', () => ({ runOAuthSetup: vi.fn() }))
 vi.mock('./tools/registry.js', () => ({ registerTools: vi.fn() }))
+// main.ts nạp transport http bằng dynamic import; vi.mock chặn cả đường đó.
+vi.mock('./transports/http.js', () => ({ startHttp: vi.fn() }))
 vi.mock('@modelcontextprotocol/sdk/server/stdio.js', () => ({
   // Must be `new`-able (main.ts does `new StdioServerTransport()`) -- an
   // arrow-function mock implementation cannot be a constructor.
@@ -21,6 +23,7 @@ import { getState, resolveCredentialState } from './auth/credential-state.js'
 import { runOAuthSetup } from './auth/oauth-setup.js'
 import { bootstrap, getTransportMode, startServer } from './main.js'
 import { registerTools } from './tools/registry.js'
+import { startHttp } from './transports/http.js'
 
 describe('getTransportMode', () => {
   const originalEnv = process.env
@@ -80,8 +83,17 @@ describe('startServer', () => {
     errorSpy.mockRestore()
   })
 
-  it('throws the Milestone-3 error for http mode', async () => {
-    await expect(startServer('http')).rejects.toThrow('http mode is Milestone 3 (not yet implemented)')
+  it('hands http mode to the http transport without touching the stdio OAuth path', async () => {
+    vi.mocked(startHttp).mockResolvedValue(undefined)
+
+    await startServer('http')
+
+    expect(startHttp).toHaveBeenCalledOnce()
+    // Nhánh stdio mở browser để consent -- container không có browser, và ở remote
+    // thì mỗi người dùng tự consent qua /authorize. Nó phải KHÔNG chạy ở http mode.
+    expect(runOAuthSetup).not.toHaveBeenCalled()
+    expect(resolveCredentialState).not.toHaveBeenCalled()
+    expect(registerTools).not.toHaveBeenCalled()
   })
 
   it('serves directly without OAuth setup when already configured', async () => {
@@ -110,11 +122,12 @@ describe('startServer', () => {
   it('returns early on a second call in the same process (fork-bomb guard)', async () => {
     process.env.BETTER_WORKSPACE_MCP_BOOTSTRAPPED = 'true'
 
-    // 'http' would reject (see the test above) if the guard didn't
-    // short-circuit before the mode check -- proves the early return.
     await expect(startServer('http')).resolves.toBeUndefined()
 
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Startup aborted'))
+    // Không transport nào được dựng: guard phải chặn TRƯỚC cả nhánh mode. `startHttp`
+    // là bằng chứng cho nhánh http (trước đây là cái throw Milestone-3, nay không còn).
+    expect(startHttp).not.toHaveBeenCalled()
     expect(resolveCredentialState).not.toHaveBeenCalled()
     expect(registerTools).not.toHaveBeenCalled()
   })
@@ -139,11 +152,17 @@ describe('bootstrap', () => {
   })
 
   it('catches a thrown error and exits the process with code 1', async () => {
-    // selectedMode 'http' drives the real (unmocked, same-module) startServer
-    // into its Milestone-3 throw, which bootstrap must catch.
+    // Một transport không dựng được (ví dụ http mode thiếu env OAuth) phải nổi lên
+    // bootstrap. Trước đây test này tựa vào throw Milestone-3 của chính main.ts;
+    // http mode đã implement nên nguồn lỗi giờ là transport, mô phỏng ở đây.
+    vi.mocked(startHttp).mockRejectedValue(new Error('GOOGLE_OAUTH_CLIENT_ID is required for http mode.'))
+
     await bootstrap('http')
 
-    expect(errorSpy).toHaveBeenCalledWith('Failed to start server:', 'http mode is Milestone 3 (not yet implemented)')
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Failed to start server:',
+      'GOOGLE_OAUTH_CLIENT_ID is required for http mode.'
+    )
     expect(exitSpy).toHaveBeenCalledWith(1)
   })
 })
