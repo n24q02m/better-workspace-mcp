@@ -6,6 +6,7 @@
  */
 
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
+import { startAddAccount } from '../auth/add-account.js'
 import { getAuth, getState, resetState, resolveCredentialState } from '../auth/credential-state.js'
 import { WorkspaceMCPError, withErrorHandling } from './helpers/errors.js'
 
@@ -109,10 +110,21 @@ export function config(input: ConfigInput): Promise<ConfigResult> {
         return textResult(JSON.stringify({ primary: email.trim().toLowerCase() }))
       }
 
-      case 'account_add':
+      case 'account_add': {
+        const flow = await startAddAccount({ makePrimary: input.value === 'primary' })
+        // Deliberately not awaiting flow.done: the tool call has to return the URL
+        // right away so the user can open it. The flow stores the account and closes
+        // its temporary server on its own.
+        void flow.done.catch(() => {
+          /* already surfaced on the consent page; account_list shows the outcome */
+        })
         return textResult(
-          'Restart the server (or run the CLI) to add another Google account through the browser consent flow.'
+          JSON.stringify({
+            open: flow.url,
+            next: 'Complete the Google consent in the browser, then call config(action="account_list") to confirm.'
+          })
         )
+      }
 
       default:
         throw new WorkspaceMCPError(

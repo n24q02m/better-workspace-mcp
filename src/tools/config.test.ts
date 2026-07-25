@@ -182,8 +182,30 @@ describe('config', () => {
       })
     })
 
-    it('account_add explains how to add another account', async () => {
-      expect(textOf(await config({ action: 'account_add' }))).toMatch(/consent/i)
+    // add-account.js is mocked here: the real flow binds a local HTTP port, and the
+    // point of this test is the non-blocking contract (URL back now, consent later).
+    it('account_add returns a URL to open without blocking on the consent', async () => {
+      const seenOpts: Array<{ makePrimary?: boolean }> = []
+      vi.resetModules()
+      vi.doMock('../auth/add-account.js', () => ({
+        startAddAccount: async (opts: { makePrimary?: boolean }) => {
+          seenOpts.push(opts)
+          return { url: 'http://127.0.0.1:9999/', done: Promise.resolve('x@example.com') }
+        }
+      }))
+      try {
+        const { config: freshConfig } = await import('./config.js')
+
+        const body = JSON.parse(textOf(await freshConfig({ action: 'account_add' }))) as { open: string }
+        expect(body.open).toBe('http://127.0.0.1:9999/')
+
+        // value="primary" is how a caller asks for the new account to become default.
+        await freshConfig({ action: 'account_add', value: 'primary' })
+        expect(seenOpts).toEqual([{ makePrimary: false }, { makePrimary: true }])
+      } finally {
+        vi.doUnmock('../auth/add-account.js')
+        vi.resetModules()
+      }
     })
   })
 
