@@ -22,11 +22,20 @@ import type { GoogleTokens } from './workspace-auth.js'
 export interface AddAccountFlow {
   /** URL the user opens to start the consent screen. */
   url: string
-  /** Resolves with the email that was added; rejects if the flow failed. */
+  /** Resolves with the email that was added; rejects if the flow failed or timed out. */
   done: Promise<string>
 }
 
-export async function startAddAccount(opts: { makePrimary?: boolean } = {}): Promise<AddAccountFlow> {
+/**
+ * Walking away mid-consent is ordinary, and unlike runOAuthSetup() -- which blocks
+ * until the flow ends, so an abandoned one is visible as a stuck process -- this
+ * function returns immediately and the waiting is invisible. Without a deadline the
+ * temporary server would then stay up holding its port forever, one leak per
+ * abandoned call. After this long the flow closes itself.
+ */
+const FLOW_TTL_MS = 10 * 60 * 1000
+
+export async function startAddAccount(opts: { makePrimary?: boolean; ttlMs?: number } = {}): Promise<AddAccountFlow> {
   const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID
   const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET
   if (!clientId || !clientSecret) {
@@ -73,6 +82,23 @@ export async function startAddAccount(opts: { makePrimary?: boolean } = {}): Pro
     }
   )
 
-  const done = settled.finally(() => handle.close())
+  let timer: NodeJS.Timeout
+  const timeout = new Promise<never>((_, rej) => {
+    timer = setTimeout(
+      () => rej(new Error('Add-account flow timed out before the Google consent completed.')),
+      opts.ttlMs ?? FLOW_TTL_MS
+    )
+    // Don't let the deadline alone keep the event loop alive -- on a stdio server that
+    // turns exiting into a ten-minute hang.
+    if (typeof timer.unref === 'function') timer.unref()
+  })
+
+  // race, NOT any: whichever settles first wins, so a real onTokenReceived failure
+  // surfaces now. Promise.any ignores rejections, which would hide that error behind a
+  // "timed out" ten minutes later.
+  const done = Promise.race([settled, timeout]).finally(() => {
+    clearTimeout(timer)
+    return handle.close()
+  })
   return { url: `http://${handle.host}:${handle.port}/`, done }
 }

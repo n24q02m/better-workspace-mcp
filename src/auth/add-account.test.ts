@@ -90,6 +90,13 @@ describe('startAddAccount', () => {
     expect(closeSpy).toHaveBeenCalledTimes(1)
   })
 
+  it('closes the temporary server when the user never finishes the consent', async () => {
+    const flow = await startAddAccount({ ttlMs: 20 })
+
+    await expect(flow.done).rejects.toThrow(/timed out/i)
+    expect(closeSpy).toHaveBeenCalledTimes(1)
+  })
+
   it('fails fast when the OAuth client env vars are missing', async () => {
     delete process.env.GOOGLE_OAUTH_CLIENT_ID
     await expect(startAddAccount()).rejects.toThrow(/GOOGLE_OAUTH_CLIENT_ID/)
