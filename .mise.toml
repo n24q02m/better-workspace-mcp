@@ -7,7 +7,7 @@
 node = "24"
 bun = "latest"
 uv = "latest"
-python = "3.13"
+python = "3.14.6"
 
 [settings]
 trusted_config_paths = ["."]
