@@ -1,10 +1,3 @@
-# =============================================================================
-# CD Template: Public TypeScript MCP Server (better-workspace-mcp, better-email-mcp, etc.)
-# Source: https://github.com/n24q02m/.github/templates/cd/public-typescript.yml
-#
-# Pipeline: PSR v10 -> npm -> Docker multi-arch (amd64+arm64) -> MCP Registry
-# CUSTOMIZE: Search for "# CUSTOMIZE:" comments and adjust for your repo.
-# =============================================================================
 name: CD
 
 on:
@@ -23,9 +16,8 @@ permissions:
   packages: write
   id-token: write
 
-# CUSTOMIZE: Docker image names
 env:
-  DOCKERHUB_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/YOUR_REPO
+  DOCKERHUB_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/better-workspace-mcp
   GHCR_IMAGE: ghcr.io/${{ github.repository }}
 
 concurrency:
@@ -50,24 +42,113 @@ jobs:
         with:
           egress-policy: audit
 
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ vars.CI_APP_ID }}
+          private-key: ${{ secrets.CI_APP_KEY }}
+
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
-          token: ${{ secrets.GH_PAT }}
+          token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
+
+      # Dry-run PSR (no_operation_mode => --noop: no commit/tag/push/release) purely to
+      # learn the version it WOULD publish, so the npm-collision guard below can fire
+      # BEFORE the real run creates a git tag or GitHub Release. Same action + SHA and
+      # same prerelease inputs as the real step, run against the same untouched checkout,
+      # so the computed version is identical.
+      - uses: n24q02m/better-semantic-release@95d056deb7b7edcf6b4be69536aec70624355333 # v1.2.1
+        id: dryrun
+        with:
+          github_token: ${{ steps.app-token.outputs.token }}
+          config_file: semantic-release.toml
+          prerelease: ${{ inputs.release_type == 'beta' }}
+          prerelease_token: beta
+          no_operation_mode: true
+
+      # PSR silently no-ops when it can't find a fix:/feat: commit since the last tag
+      # -- e.g. a bot PR squash-merged with a non-conventional subject. Unlike
+      # better-email-mcp, this repo's ci.yml has NO pr-title lint job, so nothing
+      # checks the squash subject at merge time and this step is the ONLY guard
+      # against the no-bump trap. released=false alone is not an error (it is the
+      # normal outcome of a docs-only/chore-only window), so this only warns.
+      - name: Warn if commits exist since last tag but PSR computed no release
+        if: steps.dryrun.outputs.released != 'true'
+        run: |
+          set -uo pipefail
+          highest_tag="$(git tag -l 'v*' | sort -V | tail -1)"
+          if [ -z "$highest_tag" ]; then
+            echo "No existing tags -- nothing to compare."
+            exit 0
+          fi
+          commit_count="$(git rev-list "${highest_tag}..HEAD" --count)"
+          if [ "$commit_count" -gt 0 ]; then
+            echo "::warning::PSR computed no release (released=false) but ${commit_count} commit(s) exist since ${highest_tag}. This is expected if they are all chore/docs-only, but if one of them should have bumped the version (e.g. a bot-authored fix squashed with a non-conventional subject), inspect 'git log ${highest_tag}..HEAD --oneline' before assuming there is nothing to release."
+          else
+            echo "OK: no commits since ${highest_tag} -- released=false is expected."
+          fi
+
+      # Fail early and loudly if the version PSR intends to publish already exists on
+      # npm. npm never allows reusing a version number, so a hit here means the git
+      # history has diverged from the registry. Catching it here converts two nasty
+      # failure modes -- PSR silently setting released=false on a matching tag (every
+      # publish job skipped) and an opaque npm 409 deep inside `npm publish` -- into one
+      # explicit, actionable error, before any tag or Release is created.
+      - name: Guard against re-publishing an already-published npm version
+        if: steps.dryrun.outputs.released == 'true'
+        env:
+          COMPUTED_VERSION: ${{ steps.dryrun.outputs.version }}
+        run: |
+          set -uo pipefail
+          PKG='@n24q02m/better-workspace-mcp'
+          echo "Checking npm for ${PKG}@${COMPUTED_VERSION} before semantic-release tags anything..."
+
+          # npm view against the live registry (behaviour verified unauthenticated):
+          #   version exists        -> exit 0, prints the version on stdout  => COLLISION
+          #   version/package 404   -> exit non-zero, output contains 'E404' => FREE
+          #   network/registry error-> exit non-zero, output has NO 'E404'   => UNKNOWN
+          # A transient error must NEVER be read as "free": that could let a real
+          # collision slip through, which is worse than the bug this guard prevents.
+          if output="$(npm view "${PKG}@${COMPUTED_VERSION}" version 2>&1)"; then
+            status=0
+          else
+            status=$?
+          fi
+
+          # COLLISION: registry returned a concrete version -> already published.
+          if [ "${status}" -eq 0 ] && [ -n "${output}" ]; then
+            echo "::error::Computed release version ${COMPUTED_VERSION} already exists on npm as ${PKG}@${COMPUTED_VERSION}. npm NEVER allows re-publishing a version number, even one later unpublished or deprecated. This almost always means the git history diverged from what was published to npm -- tags/commits were rewritten while the registry kept the original releases. Do NOT retry the same version: bump PAST the already-published range (higher than any version ever published) and dispatch the release again."
+            exit 1
+          fi
+
+          # FREE: an E404 (missing version, or missing package) means this exact
+          # coordinate is not on the registry -> safe to publish. On this repo's very
+          # first release the whole package 404s, which is the expected FREE case.
+          if printf '%s\n' "${output}" | grep -q 'E404'; then
+            echo "OK: ${PKG}@${COMPUTED_VERSION} is not on npm (E404) -- safe to publish."
+            exit 0
+          fi
+
+          # UNKNOWN: npm view failed without an E404 (network/registry outage, rate
+          # limit, auth). Refuse to proceed so a genuine collision cannot be mistaken
+          # for "free".
+          echo "::error::Could not verify whether ${PKG}@${COMPUTED_VERSION} exists on npm: 'npm view' failed without an E404 (likely a transient registry/network error, rate limit, or outage). Refusing to proceed so a genuine collision cannot slip through as a false 'free'. Re-run the release once the registry is reachable. npm output: ${output}"
+          exit 1
 
       - uses: n24q02m/better-semantic-release@95d056deb7b7edcf6b4be69536aec70624355333 # v1.2.1
         id: release
         with:
-          github_token: ${{ secrets.GH_PAT }}
-          # CUSTOMIZE: config_file if not default
-          # config_file: semantic-release.toml
+          github_token: ${{ steps.app-token.outputs.token }}
+          config_file: semantic-release.toml
           prerelease: ${{ inputs.release_type == 'beta' }}
           prerelease_token: beta
 
       - uses: python-semantic-release/publish-action@5a5718ce47b892ef699f2972dae122297771d641 # v10.6.1
         if: steps.release.outputs.released == 'true'
         with:
-          github_token: ${{ secrets.GH_PAT }}
+          github_token: ${{ steps.app-token.outputs.token }}
           tag: ${{ steps.release.outputs.tag }}
 
   # ============================================================================
@@ -95,7 +176,16 @@ jobs:
 
       - run: bun install --frozen-lockfile
       - run: bun run build
-      - run: npm publish --no-git-checks --tag ${{ needs.release.outputs.is_prerelease == 'true' && 'beta' || 'latest' }}
+      # NODE_AUTH_TOKEN (not OIDC trusted publishing as in better-email-mcp /
+      # mcp-core, neither of which holds an NPM_TOKEN): npm cannot configure a
+      # trusted publisher for a package
+      # that has never been published, and @n24q02m/better-workspace-mcp does not
+      # exist on the registry yet. The first publish MUST use a token. Once v0.1.0
+      # is on npm, configure trusted publishing for the package and drop this env
+      # block to match the other servers.
+      # --provenance works with token auth too (needs id-token: write, granted at
+      # workflow level) and is kept so the attestation matches the rest of the stack.
+      - run: npm publish --provenance --no-git-checks --tag ${{ needs.release.outputs.is_prerelease == 'true' && 'beta' || 'latest' }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -206,7 +296,8 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           sparse-checkout: README.md
-      - uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa # v5.0.0
+      - name: Update DockerHub description
+        uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa # v5.0.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -221,8 +312,6 @@ jobs:
     needs: [release, publish-npm, merge-docker]
     if: needs.release.outputs.released == 'true' && needs.release.outputs.is_prerelease != 'true'
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
