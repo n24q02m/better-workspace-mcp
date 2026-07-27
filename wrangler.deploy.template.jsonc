@@ -1,0 +1,87 @@
+// wrangler.deploy.template.jsonc - COMMITTED placeholder template for CI CF deploy.
+// scripts/deploy_cf.py --from-template renders this into the gitignored
+// wrangler.deploy.jsonc by substituting the ${...} tokens below from the
+// environment (CI provides them from GitHub Actions secrets synced from skret).
+// Real account/KV IDs never live in git; they are placeholders here.
+//
+// Relationship to wrangler.jsonc: that file is the human-readable reference
+// carrying <ANGLE_BRACKET> placeholders and the full rationale for every choice;
+// this one is the machine-rendered twin carrying dollar-brace tokens. They must
+// stay in lockstep -- a binding added to one and not the other deploys a worker
+// whose env does not match what src/worker.ts declares. The comments below are
+// abridged; the long-form reasoning lives in wrangler.jsonc and src/worker.ts.
+//
+// Note for editors: render_template substitutes EVERY dollar-brace token in this
+// file, comments included, and hard-fails on one it cannot resolve. Do not write
+// a token-shaped example in a comment; spell it out in words instead.
+//
+// NO routes block, matching email/notion/telegram: the scoped CF_DEPLOY_TOKEN
+// cannot reconcile routes, so workspace.n24q02m.com is attached to this worker
+// ONCE out of band and every later deploy leaves it alone. A routes block here
+// would fail the deploy, not fix a missing domain.
+// workers_dev:false keeps the worker off *.workers.dev.
+{
+  "name": "better-workspace-mcp-worker",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-06-14",
+  // src/worker.ts imports @cloudflare/containers, which needs node builtins.
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "containers": [
+    {
+      "name": "better-workspace-mcp-worker",
+      "class_name": "WorkspaceContainer",
+      "image": "registry.cloudflare.com/${CLOUDFLARE_ACCOUNT_ID}/better-workspace-mcp:${IMAGE_TAG}",
+      // 1 GiB, NOT the 256 MiB `dev` tier: every vendored service is constructed
+      // eagerly at module load and each pulls a generated googleapis surface, so
+      // all eleven domains are resident before the first request. Revisit
+      // downward only against measured RSS from a live deploy, never upward.
+      "instance_type": "basic",
+      // Solo-dev hard cap; the default (100) is how the 2026-06 CF bill ran 189%
+      // over budget. src/worker.ts collapses every request onto one DO precisely
+      // so this cap cannot deadlock the OAuth handshake.
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "WORKSPACE", "class_name": "WorkspaceContainer" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["WorkspaceContainer"] }],
+  "kv_namespaces": [{ "binding": "KV", "id": "${CF_KV_ID}" }],
+  // Non-secret container config, forwarded into the container process by
+  // WorkspaceContainer.envVars. The SECRETS this deploy also needs are set once
+  // per worker with `wrangler secret put` and are NOT in this file:
+  //   CREDENTIAL_SECRET             -> per-sub credential keys + JWTIssuer EdDSA
+  //   MCP_RELAY_PASSWORD            -> Gate A, the shared relay-password front door
+  //   GOOGLE_OAUTH_WEB_CLIENT_ID    -> the WEB OAuth client, not the Desktop one
+  //   GOOGLE_OAUTH_WEB_CLIENT_SECRET
+  // The _WEB_ names match the skret key names; src/worker.ts renames them to the
+  // plain GOOGLE_OAUTH_CLIENT_ID/_SECRET the server reads (CONTAINER_ENV_SOURCES),
+  // so the deploy step is a straight copy with nothing to mistranslate.
+  //
+  // Missing CREDENTIAL_SECRET or MCP_RELAY_PASSWORD does NOT fail `wrangler
+  // deploy`; it fails the canary in scripts/deploy_cf.py (container refuses to
+  // start / Gate A finds no /login front door), which is the intended order.
+  //
+  // MCP_AUTH_DISABLE is intentionally ABSENT and must stay absent: it would make
+  // mcp-core issue anonymous claims with no `sub`, collapsing every user into one
+  // credential bucket. Never set an auth-bypass flag on this infra.
+  //
+  // MCP_NO_BROWSER is not here either -- it is pinned in src/worker.ts
+  // (CONTAINER_FIXED_ENV) because it is a property of the container runtime, not
+  // a deployment choice an edit to this file should be able to drop.
+  "vars": {
+    "MCP_TRANSPORT": "http",
+    "PORT": "8080",
+    // mcp-core binds 127.0.0.1 by default; without this the container "is not
+    // listening in the TCP address 10.0.0.1:8080".
+    "HOST": "0.0.0.0",
+    // Must be the exact public origin. mcp-core falls back to the Host header
+    // when unset, yielding an http:// issuer and a redirect_uri no registered
+    // Web-client URI matches -> Google 400 redirect_uri_mismatch.
+    "PUBLIC_URL": "${PUBLIC_URL}",
+    "MCP_STORAGE_BACKEND": "cf-kv",
+    "MCP_KV_BASE_URL": "http://kv.internal"
+  },
+  "observability": { "enabled": true }
+}
