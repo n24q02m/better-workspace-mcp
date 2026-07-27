@@ -176,18 +176,13 @@ jobs:
 
       - run: bun install --frozen-lockfile
       - run: bun run build
-      # NODE_AUTH_TOKEN (not OIDC trusted publishing as in better-email-mcp /
-      # mcp-core, neither of which holds an NPM_TOKEN): npm cannot configure a
-      # trusted publisher for a package
-      # that has never been published, and @n24q02m/better-workspace-mcp does not
-      # exist on the registry yet. The first publish MUST use a token. Once v0.1.0
-      # is on npm, configure trusted publishing for the package and drop this env
-      # block to match the other servers.
-      # --provenance works with token auth too (needs id-token: write, granted at
-      # workflow level) and is kept so the attestation matches the rest of the stack.
+      # OIDC trusted publishing, no NODE_AUTH_TOKEN -- the same shape as mcp-core,
+      # better-godot-mcp and better-email-mcp, none of which holds an NPM_TOKEN.
+      # The scaffold this repo came from still carries an NODE_AUTH_TOKEN block;
+      # mcp-core removed it in "revert incorrect NPM_TOKEN env in CD workflow", so
+      # keeping it here would reintroduce something the stack deliberately dropped.
+      # --provenance needs id-token: write, granted at workflow level.
       - run: npm publish --provenance --no-git-checks --tag ${{ needs.release.outputs.is_prerelease == 'true' && 'beta' || 'latest' }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   # ============================================================================
   # Build Docker (multi-arch: amd64 + arm64)
