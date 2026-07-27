@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="https://better-workspace-mcp.n24q02m.com/logo.svg" alt="better-workspace-mcp" width="120">
-</p>
-
 <h1 align="center">better-workspace-mcp</h1>
 
 <p align="center">
@@ -18,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="https://better-workspace-mcp.n24q02m.com">Docs</a> ·
+  <a href="https://mcp.n24q02m.com">Docs</a> ·
   <a href="#install">Install</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="https://github.com/n24q02m/better-workspace-mcp/discussions">Community</a>
@@ -53,13 +49,124 @@
 </details>
 <!-- END: AUTO-GENERATED-CROSS-PROMO -->
 
+## Table of contents
+
+- [Install](#install)
+- [Remote (HTTP mode)](#remote-http-mode)
+- [Tools](#tools)
+- [Quick start](#quick-start)
+- [Multi-account](#multi-account)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## Install
 
-(See [docs](https://better-workspace-mcp.n24q02m.com) for full install matrix.)
+The server runs in two modes: **stdio** (default, single-user, one Google OAuth
+client of your own) and **HTTP** (multi-user, OAuth 2.1 delegated to Google). For
+stdio, add it to your MCP client config:
+
+```jsonc
+{
+  "mcpServers": {
+    "better-workspace": {
+      "command": "npx",
+      "args": ["--yes", "@n24q02m/better-workspace-mcp@latest"],
+      "env": {
+        "GOOGLE_OAUTH_CLIENT_ID": "<your-client-id>.apps.googleusercontent.com",
+        "GOOGLE_OAUTH_CLIENT_SECRET": "<your-client-secret>"
+      }
+    }
+  }
+}
+```
+
+Those two values come from an OAuth 2.0 client of type **Desktop app**, created in
+the [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+under APIs & Services → Credentials. Desktop is the right type because the server
+receives the consent redirect on a
+[loopback address](https://developers.google.com/identity/protocols/oauth2/native-app),
+not on a public URL. Enable the Workspace APIs you plan to call on the same
+project, and add yourself as a test user while the consent screen is unpublished.
+
+The first run opens the Google consent screen in your browser; the refresh token
+is stored encrypted on your machine, so later runs start without asking again.
+
+Prefer a hosted server to running your own? See
+[Remote (HTTP mode)](#remote-http-mode).
+
+## Remote (HTTP mode)
+
+A hosted multi-user instance runs at `https://workspace.n24q02m.com/mcp`. It
+authenticates with OAuth 2.1 delegated to Google, and each user's credentials are
+stored under their own JWT `sub` — no shared account:
+
+```jsonc
+{
+  "mcpServers": {
+    "better-workspace": {
+      "type": "http",
+      "url": "https://workspace.n24q02m.com/mcp"
+    }
+  }
+}
+```
+
+Self-hosting this mode needs an OAuth client of type **Web application** instead
+of Desktop, because the consent redirect comes back to a fixed
+`/accounts/callback` on your own domain and a Web client's redirect URI has to be
+registered with Google in advance.
+
+## Tools
+
+One composite tool per Workspace domain, plus `config` and `help`:
+
+| Tool | What it covers |
+| --- | --- |
+| `docs` | Google Docs -- `getText`, `create`, `writeText`, `getSuggestions`, `replaceText`, `formatText` |
+| `drive` | Files and folders -- `search`, `findFolder`, `createFolder`, `moveFile`, `renameFile`, `trashFile`, `downloadFile`, `getComments` |
+| `calendar` | Events -- `listCalendars`, `listEvents`, `getEvent`, `createEvent`, `updateEvent`, `deleteEvent`, `respondToEvent`, `findFreeTime` |
+| `gmail` | Mail -- `search`, `get`, `send`, `createDraft`, `sendDraft`, `modify`, `batchModify`, `modifyThread`, `downloadAttachment`, `listLabels`, `createLabel` |
+| `sheets` | Spreadsheets, read-only -- `getText`, `getRange`, `getMetadata` |
+| `slides` | Presentations -- 19 actions covering slides, text, shapes, images, tables, and speaker notes |
+| `tasks` | Task lists and tasks -- `listTaskLists`, `listTasks`, `createTask`, `updateTask`, `completeTask`, `deleteTask` |
+| `chat` | Google Chat -- `listSpaces`, `findSpaceByName`, `setUpSpace`, `getMessages`, `listThreads`, `sendMessage`, `sendDm`, `findDmByEmail` |
+| `people` | Profile lookups -- `getMe`, `getUserProfile`, `getUserRelations` |
+| `forms` | Forms -- `create`, `get`, `batchUpdate`, `listResponses`, `getResponse` |
+| `time` | Local date/time/timezone helpers (no Google account needed) |
+| `config` | Credential state and account management |
+| `help` | Full documentation for any tool |
+
+Questions are added to a form with `forms(action="batchUpdate")`, not at `create`;
+responses are read-only, because the Forms API cannot write one. Listing or
+deleting forms goes through `drive`.
 
 ## Quick start
 
-(Add example commands here.)
+Check that the credentials landed, with the `config` tool. Before the first
+consent this reports `awaiting_setup`; afterwards it names the account the server
+is acting as:
+
+```json
+{ "action": "status" }
+```
+
+Then call a domain tool. On `docs`, `create` returns the new document's ID, which
+`getText` reads back:
+
+```json
+{ "action": "create", "title": "Notes", "content": "First line." }
+{ "action": "getText", "documentId": "<id-from-create>" }
+```
+
+`time`, `config`, and `help` need no Google account, so they answer even before
+consent -- `time` is the quickest check that the server is wired up at all:
+
+```json
+{ "action": "getCurrentTime" }
+```
+
+To act as a second Google account, see [Multi-account](#multi-account).
 
 ## Multi-account
 
@@ -148,7 +255,15 @@ replaced in place, so nothing else changes.
 
 ## Documentation
 
-Full docs at [better-workspace-mcp.n24q02m.com](https://better-workspace-mcp.n24q02m.com).
+Docs for the whole MCP server stack are at
+**[mcp.n24q02m.com](https://mcp.n24q02m.com)**. A page dedicated to this server is
+not published yet; until it is, the two references that apply here are:
+
+- [Modes overview](https://mcp.n24q02m.com/get-started/modes-overview/) -- stdio (default) and HTTP (multi-user, OAuth 2.1)
+- [Multi-user setup](https://mcp.n24q02m.com/get-started/multi-user/) -- the per-JWT-`sub` credential model behind [Remote (HTTP mode)](#remote-http-mode)
+
+Every tool also documents itself at runtime: call `help` for the full reference on
+any of them, including the exact parameters each action takes.
 
 ## Contributing
 
