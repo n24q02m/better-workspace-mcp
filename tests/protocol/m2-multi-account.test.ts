@@ -18,6 +18,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { PerPluginStore, setHomeDirForTesting } from '@n24q02m/mcp-core/storage'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { STORE_PLUGIN } from '../../src/constants.js'
+import { DOMAINS } from '../../src/tools/domains/index.js'
 
 const REPO_ROOT = resolve(__dirname, '..', '..')
 const CLI_PATH = resolve(REPO_ROOT, 'bin', 'cli.mjs')
@@ -89,7 +90,10 @@ describe('M2 multi-account protocol E2E', () => {
   it('every domain tool advertises the account parameter', async () => {
     const { tools } = await client.listTools()
     const domains = tools.filter((t) => !['config', 'help'].includes(t.name))
-    expect(domains).toHaveLength(10)
+    // Derived from DOMAINS so a new domain cannot pass by being filtered out
+    // here, and so adding one does not fail on an arithmetic mismatch that says
+    // nothing about the account parameter this test is actually about.
+    expect(domains.map((t) => t.name).sort()).toEqual(DOMAINS.map((d) => d.name).sort())
     for (const tool of domains) {
       expect(Object.keys((tool.inputSchema as { properties: Record<string, unknown> }).properties)).toContain('account')
     }
