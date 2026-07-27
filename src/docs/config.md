@@ -44,6 +44,21 @@ the primary account.
   temporary consent server on a loopback port; over HTTP it hands you a URL that
   comes back to a fixed `/accounts/callback` on the running server, because a
   Web OAuth client's redirect URI has to be registered in advance.
+- **What that means for an HTTP deployment**: `<PUBLIC_URL>/accounts/callback`
+  must be one of the redirect URIs registered on the Google **Web** OAuth client
+  the server runs with. It is a second URI, separate from the
+  `<PUBLIC_URL>/callback` used to sign in to the server itself -- registering only
+  the latter leaves `account_add` failing at Google with
+  `redirect_uri_mismatch`, after the consent screen rather than before it. Both
+  are built from `PUBLIC_URL`, so that value has to be the exact public origin;
+  Google compares redirect URIs as strings.
+- The account that gets added is filed under **you**, not under whoever the
+  consent screen was signed in as. Those are two different identities: the caller
+  is identified by the `sub` in the token that authenticated this tool call, and
+  the account by the email in the tokens Google returns. The `sub` travels to the
+  callback in a signed, single-use state parameter, so nobody else's bucket can
+  receive the account -- and the state carries no authority to move your default
+  account, which is why `value="primary"` is stdio only.
 - Requires `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` in the
   environment. The HTTP flow also needs `PUBLIC_URL` and `CREDENTIAL_SECRET`.
 - Returns the URL immediately rather than blocking on the consent. Open it, sign

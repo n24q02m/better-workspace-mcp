@@ -30,3 +30,23 @@ set of accounts with `config`: `account_add`, `account_list`, `account_remove`,
 Naming an account that is not configured is an error that names it; the call is
 never silently rerouted to the primary. `time` accepts `account` for signature
 parity only -- it needs no Google account.
+
+## Multi-user
+
+Served over HTTP, the server separates callers as well as accounts. The two are
+nested axes, not two words for one thing:
+
+- **User** -- who is calling. Taken from the `sub` claim of the token that
+  authenticated the request. Every `sub` gets its own credential store, encrypted
+  under its own key, so one deployment serves several people without any of them
+  reaching another's credentials.
+- **Account** -- which Google account a call acts as, chosen with `account=`.
+  Accounts live *inside* one user's store.
+
+So `account_list` answers "which Google accounts have I connected", never "which
+accounts does this deployment know about". Two users who each connect
+`shared@example.com` end up with two independent records, and a `primary` set by
+one is not a `primary` for the other.
+
+In stdio there is one user by construction -- whoever is at the machine -- so only
+the inner axis is visible. The account behaviour is identical in both.
