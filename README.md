@@ -115,9 +115,55 @@ Point your MCP client at the host you deployed it on:
 }
 ```
 
-This mode wants an OAuth client of type **Web application** rather than Desktop:
-the consent redirect comes back to a fixed `/accounts/callback` on your host, and
-a Web client's redirect URI has to be registered with Google in advance.
+### Modes
+
+Two, and only two. There is no proxy or daemon mode: stdio speaks the MCP stdio
+transport directly, with no HTTP hop inside it.
+
+| Mode | Selected by | Serves | Google OAuth client |
+| --- | --- | --- | --- |
+| `stdio` | the default | one user, on their own machine | **Desktop app** |
+| `http` | `--http`, `MCP_TRANSPORT=http`, or `TRANSPORT_MODE=http` | several users, one credential bucket per JWT `sub` | **Web application** |
+
+### Two OAuth clients, not one
+
+Google binds redirect URIs to the *type* of the OAuth client, so the two modes
+cannot share one:
+
+- A **Desktop** client may redirect to any loopback port. That is what stdio
+  needs -- it stands a throwaway consent server on a random port.
+- A **Web** client may only redirect to URIs registered in advance. That is what
+  a deployment needs, because a public host has no loopback to come back to.
+
+Register both of these on the Web client, or the flows that use them fail with
+`redirect_uri_mismatch`:
+
+| Redirect URI | Used by |
+| --- | --- |
+| `<PUBLIC_URL>/callback` | signing in to the server itself (delegated OAuth) |
+| `<PUBLIC_URL>/accounts/callback` | `config(action="account_add")` -- adding a second Google account |
+
+Keep the two client credentials under separate names. Pointing
+`GOOGLE_OAUTH_CLIENT_ID`/`_SECRET` at the Web client on a machine that also runs
+stdio breaks every stdio install, which is why the Cloudflare deploy carries the
+Web pair as `GOOGLE_OAUTH_WEB_CLIENT_ID`/`_SECRET` and renames it on the way into
+the container (`src/worker.ts`).
+
+### Environment
+
+| Variable | Required | What it does |
+| --- | --- | --- |
+| `GOOGLE_OAUTH_CLIENT_ID` | yes | Web client id. The server refuses to start without it. |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | yes | Web client secret. Same. |
+| `CREDENTIAL_SECRET` | yes | Derives each subject's credential-encryption key, and the JWT signing key. Without it that signing key would land on a container filesystem that does not survive a restart, so the server refuses to start rather than lose everyone's session on the next deploy. |
+| `PUBLIC_URL` | in practice | The exact public origin, e.g. `https://<your-host>`. It is what the redirect URIs above are built from; unset, the server falls back to the `Host` header and the redirect stops matching what Google has registered. |
+| `MCP_RELAY_PASSWORD` | recommended | One shared password gating `/authorize` behind a login page. Empty disables the gate, which leaves anyone who can reach the host able to start an OAuth flow against your deployment. |
+| `PORT` | no | Listen port. `0` (the default) asks the OS for a free one. |
+| `HOST` | no | Bind address. Defaults to loopback, so a container needs `0.0.0.0`. |
+| `MCP_STORAGE_BACKEND` / `MCP_KV_BASE_URL` | Cloudflare only | Set to `cf-kv` and the worker's internal KV URL when running as a Cloudflare Worker + Container. Left unset, credentials are stored on local disk. |
+
+`docker-compose.http.yml` in this repo is these variables written out as a
+runnable overlay.
 
 ## Tools
 

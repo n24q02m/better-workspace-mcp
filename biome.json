@@ -29,7 +29,8 @@
       "!**/*.log",
       "!**/.env",
       "!package.json",
-      "!.release-please-manifest*.json"
+      "!.release-please-manifest*.json",
+      "!.github/rulesets/*.json"
     ]
   },
   "linter": {

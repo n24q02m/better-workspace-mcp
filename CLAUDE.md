@@ -2,15 +2,53 @@
 
 TypeScript MCP Server cho Google Workspace (Docs/Drive/Calendar/Gmail/Sheets/Slides/Tasks/Chat/People/Forms + multi-account). Kien truc: vendored-services (Apache-2.0 code tu gemini-cli-extensions/workspace duoi `src/vendored/services/`, gan byte-identical upstream — 2 file da fork co chu dich, xem `NOTICE`) + service CUA MINH duoi `src/services/` (upstream khong co) + mcp-core auth adapter (`@n24q02m/mcp-core`, OAuth + credential storage + relay). N+2 tools: 1 composite tool per service (docs, drive, calendar, chat, gmail, slides, sheets, tasks, people, time, forms) + `config` + `help`.
 
-Trang thai: M2 multi-account COMPLETE (Task 9 smoke that voi 2 Google account da PASS 2026-07-25 — xem `.private/superpower/better-workspace-mcp/m2-task9-live-smoke-2026-07-25.md`). M3 Task 1 (sub-keying) da tren main. Stdio server voi 11 domain (docs/drive/calendar/chat/gmail/slides/sheets/tasks/people/time/forms) + `config` + `help`, mcp-core Desktop OAuth (redirect + access_type=offline -> refresh_token), N+2 registry derive tu `src/tools/domains/index.ts` (DOMAINS list) + `makeDomainRun` factory. Moi domain tool nhan `account="<email>"` (khong truyen = primary); `config` them 4 action `account_add`/`account_list`/`account_remove`/`account_set_default`. 378 tests (25 file), coverage TREN CI (Linux, la cho gate chan) 98.08 stmts / 95.24 branches / 98.06 funcs / 98.57 lines vs gate 95/95/90/95 (thu tu gate = lines/functions/branches/statements; src/vendored/** excluded — nen test cho file vendored da fork KHONG lam doi con so coverage, con `src/services/**` thi CO tinh day du). Chay tren Windows ra so KHAC vai phan muoi (98.32/95.24/98.7/98.7) vi mot so nhanh phu thuoc platform — lech nho giua local va CI la binh thuong, KHONG phai dau hieu hong. M1 da validated live real Google (docs create+read + 6 domain read). Milestone sau: M5 packaging + release + sync-upstream script.
+Trang thai: M2 multi-account COMPLETE (Task 9 smoke that voi 2 Google account da PASS 2026-07-25 — xem `.private/superpower/better-workspace-mcp/m2-task9-live-smoke-2026-07-25.md`). M3 Task 1 (sub-keying) da tren main. Stdio server voi 11 domain (docs/drive/calendar/chat/gmail/slides/sheets/tasks/people/time/forms) + `config` + `help`, mcp-core Desktop OAuth (redirect + access_type=offline -> refresh_token), N+2 registry derive tu `src/tools/domains/index.ts` (DOMAINS list) + `makeDomainRun` factory. Moi domain tool nhan `account="<email>"` (khong truyen = primary); `config` them 4 action `account_add`/`account_list`/`account_remove`/`account_set_default`. 390 tests (26 file), coverage TREN CI (Linux, la cho gate chan) 98.08 stmts / 95.24 branches / 98.06 funcs / 98.57 lines vs gate 95/95/90/95 (thu tu gate = lines/functions/branches/statements; src/vendored/** excluded — nen test cho file vendored da fork KHONG lam doi con so coverage, con `src/services/**` thi CO tinh day du). Chay tren Windows ra so KHAC vai phan muoi (98.32/95.24/98.7/98.7) vi mot so nhanh phu thuoc platform — lech nho giua local va CI la binh thuong, KHONG phai dau hieu hong. M1 da validated live real Google (docs create+read + 6 domain read). M5 packaging: compose overlay + `scripts/sync-upstream.mjs` DA co; con lai la release cascade (BETA → Test B → STABLE) + trang tren mcp.n24q02m.com.
 
 ## Vendored boundary
 
 `src/vendored/services/*` + pure-logic utils (`IdUtils/validation/GaxiosConfig/DriveQueryBuilder/MimeHelper/constants`) la Apache-2.0 upstream code tu gemini-cli-extensions/workspace. Giu GIONG upstream de con SYNC duoc cap nhat cua Google ve — do la ly do duy nhat, khong phai muc tieu tu than. Gap bug o day thi SUA NGAY tai repo nay, roi ghi file da fork vao `NOTICE` de lan sync sau bao conflict thay vi ghi de im lang; PR-back len upstream KHONG phai viec cua repo nay. Da fork co chu dich: `MimeHelper.ts` (boundary suy bien), `SheetsService.ts` (N call -> batchGet + fallback). `paths.ts`/`logger.ts`/`auth/AuthManager.ts` la SHIM cua minh (infra decoupled khoi gemini-cli). **Service ma upstream KHONG co thi dat `src/services/`, KHONG dat trong `src/vendored/`** (`FormsService.ts` la case dau tien): nhet code minh vao vung vendored se lam lan sync sau bao conflict o mot file upstream chua tung co. Viet theo hinh dang service vendored (constructor nhan AuthManager, private client getter, arrow-fn property) nhung theo style adapter — biome KHONG bo qua `src/services/**`, va coverage gate CO tinh no. biome + tsc-strict deu handle qua override (`biome.json` bo lint VA format `src/vendored/{services,utils}/**` — nen file trong do khong duoc biome kiem, phai tu khop style cua chinh file do: vendored dung dau `;`, khac code adapter). Xem `NOTICE`.
 
+## Sync upstream
+
+```bash
+node scripts/sync-upstream.mjs --ref main --dry-run   # xem truoc, khong ghi gi
+node scripts/sync-upstream.mjs --ref v0.0.8           # ghi + chay `bun run test`
+```
+
+Chay TAY theo chu ky, KHONG wire vao CI (sync = ghi de code chua ai review trong PR cua repo nay; pipeline xanh ma tu di chuyen code vendored la dung cai nguoc lai voi ly do `src/vendored/**` ton tai). Script doc HAI danh sach trong `NOTICE` lam nguon su that — file da fork (bao CONFLICT, KHONG ghi) va file shim trung ten voi upstream (bo qua han). `NOTICE` hong/rong → script TU CHOI chay, vi list rong se doc thanh "khong file nao duoc bao ve".
+
+Verified 2026-07-27: `--ref main` cho 15/15 file non-fork **byte-identical** + dung 2 CONFLICT (`SheetsService.ts`, `MimeHelper.ts`) → vendored tree dang khop upstream main, va list trong `NOTICE` dung du. `--ref v0.0.8` cho 4 changed + `TasksService.ts` GONE (service them sau tag do) — tuc repo vendor tu `main`, khong tu tag.
+
+**Bay Windows da tra gia**: temp clone cua upstream KHONG co `.gitattributes`, ma `core.autocrlf=true` nam o system gitconfig → checkout ra CRLF, so voi LF cua repo nay thi MOI file deu "changed" (dry run dau tien bao 14 changed trong khi upstream khong doi gi). Script tu set `core.autocrlf=false` + `core.eol=lf` cho temp clone. Dung bo hai dong do.
+
 ## Modes
 
-stdio mode (mac dinh, single-user qua env credentials) la target M1-M2. HTTP/multi-user la M3. `account_add` chay duoc o CA HAI mode va tu chon duong di theo `currentSubject()`: co subject scope (= remote, `authScope` mo tu Bearer JWT) thi tra URL toi `/accounts/callback` co dinh; khong co (= stdio) thi dung server tam tren loopback. Xem Multi-account.
+DUNG HAI mode, chon o `main.ts:getTransportMode` — `stdio` (mac dinh) va `http` (`--http` | `MCP_TRANSPORT=http` | `TRANSPORT_MODE=http`). **KHONG co `stdio proxy`**: cac server khac trong stack (notion/email/wet) chay `runSmartStdioProxy` — stdio pipe boc mot daemon HTTP ben trong — con repo nay noi `StdioServerTransport` THANG (`main.ts:87`), khong co daemon hop. Dung viet "stdio proxy" vao tai lieu/mode-matrix cua repo nay.
+
+- **stdio**: single-user. Credential KHONG den tu env — env chi mang OAuth client id/secret; token that do `runOAuthSetup` lay ve qua consent lan dau roi luu ma hoa vao `~/.better-workspace-mcp/config.json` (`PerPluginStore`, sub=null, khoa machine-bound o `.secret`). Lan chay sau resolve thang ve `configured`.
+- **http**: multi-user, OAuth 2.1 delegated toi Google qua mcp-core; moi nguoi mot bucket theo JWT `sub` (`subs/<sub>/config.json`, khoa scrypt derive tu `CREDENTIAL_SECRET`). `authScope` mo `sub` tu Bearer JWT; khong co `sub` dung duoc thi NEM (fail closed, invariant 7), khong roi ve bucket chung.
+
+`account_add` chay duoc o CA HAI mode va tu chon duong di theo `currentSubject()`: co subject scope (= remote) thi tra URL toi `/accounts/callback` co dinh; khong co (= stdio) thi dung server tam tren loopback. Xem Multi-account.
+
+### Env cua http mode
+
+| Bien | Bat buoc | Vai tro |
+|---|---|---|
+| `GOOGLE_OAUTH_CLIENT_ID` / `_SECRET` | co | Web client. `startHttp` nem neu thieu (`transports/http.ts:100-105`). |
+| `CREDENTIAL_SECRET` | co | Khoa AES cua bucket per-sub + khoa ky JWT cua mcp-core. Thieu no thi mcp-core ghi khoa RS256 ra FS container EPHEMERAL → identity vo moi lan recreate; nen chan ngay o startup thay vi no giua luong consent. |
+| `PUBLIC_URL` | tren deploy that | Origin cong khai chinh xac; redirect URI derive tu day. Bo trong thi mcp-core lay `Host` header → issuer `http://` + redirect khong khop URI da dang ky → Google 400 `redirect_uri_mismatch`. `buildAddAccountUrl` nem thang neu thieu. |
+| `MCP_RELAY_PASSWORD` | nen co | Gate A: chan `/authorize` sau `/login`. Rong = TAT gate (mcp-core coi empty la disable) → ai cham duoc host cung mo duoc OAuth flow. `worker.ts` PHAI forward key nay, thieu = relay self-service mo ra Internet. |
+| `PORT` / `HOST` | khong | `PORT` mac dinh `0` (OS cap). `HOST` mac dinh loopback cua mcp-core → container PHAI `0.0.0.0`. |
+| `MCP_STORAGE_BACKEND` / `MCP_KV_BASE_URL` | chi CF | `cf-kv` + `http://kv.internal`. Khong set = luu tren dia container. |
+
+### Hai OAuth client, khong phai mot
+
+Google rang buoc redirect URI theo **loai client**: Desktop redirect duoc toi loopback port bat ky (dung cho stdio), Web chi redirect toi URI dang ky truoc (dung cho deploy). Nen stdio va http la HAI client khac nhau, hai secret khac nhau. Web client phai dang ky ca hai URI:
+
+- `<PUBLIC_URL>/callback` — dang nhap vao chinh server (delegated OAuth, `callbackPath` mac dinh cua mcp-core).
+- `<PUBLIC_URL>/accounts/callback` — `config(action="account_add")`.
+
+Ghi de `GOOGLE_OAUTH_CLIENT_ID/_SECRET` bang gia tri Web se lam dut moi ban stdio dang chay. Vi the skret `/better-workspace-mcp/prod` giu HAI cap ten khac nhau (`GOOGLE_OAUTH_*` = Desktop, `GOOGLE_OAUTH_WEB_*` = Web), va `worker.ts:CONTAINER_ENV_SOURCES` doi ten `_WEB_` → ten tran khi bom vao container — server khong biet gi ve Cloudflare.
 
 ## Multi-account
 
@@ -40,6 +78,7 @@ bun run build       # tsc -build + scripts/build-cli.js -> bin/cli.mjs
 ## Cau hinh
 
 - License: Apache-2.0 (repo nay vendor code Apache-2.0, khac voi MIT cua cac MCP server khac trong stack).
+- Compose: `docker-compose.yml` (base, target `stdio`) + `docker-compose.http.yml` (overlay, target `http`). Build tu Dockerfile local voi `target:` chu KHONG pull theo tag — CD build KHONG truyen `target` nen moi tag da publish deu la stage CUOI cua Dockerfile (= `http`), khong co tag `:stdio`. Volume tro vao `/home/node/.better-workspace-mcp` (dung cho PerPluginStore ghi), KHONG phai `/data` nhu notion/email (o do volume /data khong che duong ghi nao). **KHONG co `docker-compose.cloudflare.yml`**: overlay do o notion/wet tro `MCP_KV_BASE_URL` vao `wrangler dev` public fetch, nhung `worker.ts` (ca 3 repo) CO Y khong dispatch `kv.internal` tren public fetch — de lo la ai cung doc/ghi duoc KV credential. Port o overlay = 8087 (notion+telegram 8081, email 8082, imagine 8084, wet 8085, mnemo 8086).
 - `type-check` chay CA HAI pass: `tsc --noEmit` (server, types node) va `tsc --noEmit -p tsconfig.worker.json` (`src/worker.ts`, types `@cloudflare/workers-types`). `tsconfig.json` `exclude` worker.ts khoi pass dau. Luu y: `exclude` KHONG chan mot file bi check khi file trong `include` import no — nen test cua worker phai nam o `tests/worker.test.ts`, KHONG phai `src/worker.test.ts` (dat trong `src/` se keo worker.ts nguoc vao pass node-typed va fail o `cloudflare:workers`).
 - Test surface: 378 test / 25 file = unit + component + 2 hermetic protocol E2E (`tests/protocol/m1-stdio.test.ts`, `tests/protocol/m2-multi-account.test.ts` — stdio_client spawn bin/cli.mjs, seeded token, no real network). Real-Google smoke = thu cong (manual, ngoai CI — can OAuth client + consent). Smoke 2 account cua M2 DA CHAY 2026-07-25, 6/6 buoc PASS: M1 flat blob -> v2 adopt offline giu nguyen `refresh_token`; account thu 2 them qua `account_add`; `getMe` tra 2 danh tinh khac nhau; `drive.search` tra data khac nhau theo account; account la truyen vao bi tu choi DUNG TEN (khong am tham fallback ve primary); force-expire refresh chi cap nhat account B, token account A byte-identical. Chi tiet + cach tai hien: `.private/superpower/better-workspace-mcp/m2-task9-live-smoke-2026-07-25.md`.
 
