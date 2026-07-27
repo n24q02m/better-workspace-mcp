@@ -92,30 +92,32 @@ project, and add yourself as a test user while the consent screen is unpublished
 The first run opens the Google consent screen in your browser; the refresh token
 is stored encrypted on your machine, so later runs start without asking again.
 
-Prefer a hosted server to running your own? See
+The same server can also serve several people over HTTP -- see
 [Remote (HTTP mode)](#remote-http-mode).
 
 ## Remote (HTTP mode)
 
-A hosted multi-user instance runs at `https://workspace.n24q02m.com/mcp`. It
-authenticates with OAuth 2.1 delegated to Google, and each user's credentials are
-stored under their own JWT `sub` — no shared account:
+Besides stdio, the server runs as a multi-user HTTP service. Authentication is
+OAuth 2.1 delegated to Google, and each user's Google credentials are kept in
+their own bucket keyed by their JWT `sub`, so one deployment serves several
+people without them sharing an account.
+
+Point your MCP client at the host you deployed it on:
 
 ```jsonc
 {
   "mcpServers": {
     "better-workspace": {
       "type": "http",
-      "url": "https://workspace.n24q02m.com/mcp"
+      "url": "https://<your-host>/mcp"
     }
   }
 }
 ```
 
-Self-hosting this mode needs an OAuth client of type **Web application** instead
-of Desktop, because the consent redirect comes back to a fixed
-`/accounts/callback` on your own domain and a Web client's redirect URI has to be
-registered with Google in advance.
+This mode wants an OAuth client of type **Web application** rather than Desktop:
+the consent redirect comes back to a fixed `/accounts/callback` on your host, and
+a Web client's redirect URI has to be registered with Google in advance.
 
 ## Tools
 
