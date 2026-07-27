@@ -177,7 +177,8 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run build
       # NODE_AUTH_TOKEN (not OIDC trusted publishing as in better-email-mcp /
-      # better-notion-mcp): npm cannot configure a trusted publisher for a package
+      # mcp-core, neither of which holds an NPM_TOKEN): npm cannot configure a
+      # trusted publisher for a package
       # that has never been published, and @n24q02m/better-workspace-mcp does not
       # exist on the registry yet. The first publish MUST use a token. Once v0.1.0
       # is on npm, configure trusted publishing for the package and drop this env
