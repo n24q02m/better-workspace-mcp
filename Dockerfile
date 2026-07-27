@@ -15,7 +15,7 @@ COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 
 # Use Node.js for building (tsc + esbuild)
-FROM node:24.15.0-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f AS builder
+FROM node:24.18.0-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS builder
 
 WORKDIR /app
 
@@ -29,7 +29,7 @@ COPY . .
 RUN npx tsc -build && node scripts/build-cli.js
 
 # Base runtime stage (shared by both targets)
-FROM node:24.15.0-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f AS base
+FROM node:24.18.0-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS base
 
 LABEL org.opencontainers.image.source="https://github.com/n24q02m/better-workspace-mcp"
 LABEL io.modelcontextprotocol.server.name="io.github.n24q02m/better-workspace-mcp"
