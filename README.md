@@ -5,7 +5,7 @@
 <h1 align="center">better-workspace-mcp</h1>
 
 <p align="center">
-  <strong>Google Workspace MCP server — Docs/Drive/Calendar/Gmail/Sheets/Slides/Tasks/Chat/People + multi-account</strong>
+  <strong>Google Workspace MCP server — Docs/Drive/Calendar/Gmail/Sheets/Slides/Tasks/Chat/People/Forms + multi-account</strong>
 </p>
 
 <p align="center">
@@ -107,11 +107,18 @@ shows exactly one account, and it is the primary.
 
 ### Forms scopes and re-consent
 
-The consent screen already requests the Google Forms scopes, so the Forms domain
-can be added later without a second trip through consent. Google does not widen a
-token that has already been issued, though: an account authorized *before* those
-scopes were added keeps the older scope set and will need one re-consent the first
-time Forms is called. Accounts added afterwards will not.
+The consent screen has requested the Google Forms scopes since before the `forms`
+tool existed, so it arrived without a second trip through consent.
+
+Accounts authorized *before* those scopes were added are covered too, but by a
+different route: Google accepts `https://www.googleapis.com/auth/drive` in place of
+the Forms scopes for every Forms method this server calls, and full `drive` has
+been on the consent screen since the first release. Google never widens a token it
+has already issued, so if a grant covers neither -- a user may withhold individual
+restricted scopes at the consent screen -- the first `forms` call returns a 403
+(`Request had insufficient authentication scopes`). Re-authorize just that account
+with `config(action="account_add")`, signing in as the same account; the record is
+replaced in place, so nothing else changes.
 
 ## Documentation
 

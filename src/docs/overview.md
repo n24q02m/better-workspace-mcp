@@ -11,6 +11,7 @@ One composite tool per Google Workspace service, plus two infra tools.
 - **tasks** -- task lists and tasks (list, create, update, complete, delete).
 - **chat** -- Google Chat spaces, messages and DMs.
 - **people** -- contacts and profiles (own profile, user profile, relations).
+- **forms** -- Google Forms (create, read, edit questions, read responses).
 - **time** -- local date/time/timezone helpers. Needs no Google account.
 - **config** -- server configuration, credential state, and the Google accounts this server can act as.
 - **help** -- full documentation for a topic.

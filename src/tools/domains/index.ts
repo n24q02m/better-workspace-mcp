@@ -12,6 +12,7 @@ import { CHAT_ACTIONS, chat } from './chat.js'
 import { DOCS_ACTIONS, docs } from './docs.js'
 import { DRIVE_ACTIONS, drive } from './drive.js'
 import type { DomainRunInput } from './factory.js'
+import { FORMS_ACTIONS, forms } from './forms.js'
 import { GMAIL_ACTIONS, gmail } from './gmail.js'
 import { PEOPLE_ACTIONS, people } from './people.js'
 import { SHEETS_ACTIONS, sheets } from './sheets.js'
@@ -197,5 +198,35 @@ export const DOMAINS: DomainDef[] = [
       resourceName: { type: 'string' }
     },
     run: people
+  },
+  {
+    name: 'forms',
+    description:
+      'Google Forms operations.\n\nActions (required params -> optional):\n- create (title -> documentTitle)\n- get (formId)\n- batchUpdate (formId, requests)\n- listResponses (formId -> pageSize, pageToken, filter)\n- getResponse (formId, responseId)\n\nQuestions are added with batchUpdate, not create. Responses are read-only (the Forms API cannot write one), and listing or deleting forms goes through the drive tool.\n\naccount = email of the Google account to use (default: primary).',
+    actions: FORMS_ACTIONS,
+    inputProps: {
+      formId: {
+        type: 'string',
+        description: 'Form ID, or the editor URL https://docs.google.com/forms/d/<formId>/edit'
+      },
+      title: { type: 'string', description: 'Form title shown to respondents (for create)' },
+      documentTitle: {
+        type: 'string',
+        description: 'Drive file name, when it should differ from the title (for create)'
+      },
+      requests: {
+        type: 'array',
+        items: { type: 'object' },
+        description: 'Forms API batchUpdate requests, e.g. [{"createItem": {...}}] (for batchUpdate)'
+      },
+      responseId: { type: 'string', description: 'Response ID (for getResponse)' },
+      pageSize: { type: 'number', description: 'Maximum responses to return (for listResponses)' },
+      pageToken: { type: 'string', description: 'Page token from a previous listResponses call' },
+      filter: {
+        type: 'string',
+        description: 'Response filter, e.g. timestamp > 2026-01-01T00:00:00Z (for listResponses)'
+      }
+    },
+    run: forms
   }
 ]

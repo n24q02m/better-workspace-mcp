@@ -117,10 +117,14 @@ describe('M1 stdio protocol E2E', () => {
     if (testHomeDir) rmSync(testHomeDir, { recursive: true, force: true })
   })
 
-  it('lists exactly the 12 N+2 tools (10 domains + config + help)', async () => {
+  // Count derived, not written down: every new domain used to make this line
+  // fail with an arithmetic complaint ("expected 12, got 13") that says nothing
+  // about what broke. The assertion that carries weight is the name comparison
+  // below -- it fails with the actual missing or unexpected tool name.
+  it(`lists exactly the ${EXPECTED_TOOL_NAMES.length} N+2 tools (${DOMAINS.length} domains + config + help)`, async () => {
     const result = await client.listTools()
 
-    expect(result.tools).toHaveLength(12)
+    expect(result.tools).toHaveLength(EXPECTED_TOOL_NAMES.length)
     expect(result.tools.map((t) => t.name).sort()).toEqual([...EXPECTED_TOOL_NAMES].sort())
   })
 
@@ -153,13 +157,21 @@ describe('M1 stdio protocol E2E', () => {
     })
   })
 
-  it('a domain tool with an unknown action returns a clean error listing valid actions (no crash)', async () => {
-    const result = await client.callTool({ name: 'docs', arguments: { action: 'bogus' } })
+  // Every domain, not just docs: this is what proves a newly added DomainDef is
+  // actually reachable end to end -- registered, past the credential gate, and
+  // dispatched into its factory. The unknown action is what keeps it hermetic;
+  // the factory rejects it before any service method (and so any Google call)
+  // runs, so the assertion needs no network and no real credentials.
+  it.each(DOMAINS.map((d) => d.name))(
+    '%s with an unknown action returns a clean error listing valid actions (no crash)',
+    async (domain) => {
+      const result = await client.callTool({ name: domain, arguments: { action: 'bogus' } })
 
-    expect(result.isError).toBe(true)
-    expect(textOf(result)).toContain('Unknown action: bogus')
-    expect(textOf(result)).toContain('Valid actions')
-  })
+      expect(result.isError).toBe(true)
+      expect(textOf(result)).toContain('Unknown action: bogus')
+      expect(textOf(result)).toContain('Valid actions')
+    }
+  )
 
   it('a hermetic domain call (time, no Google network needed) reaches past the credential gate and returns data', async () => {
     const result = await client.callTool({ name: 'time', arguments: { action: 'getCurrentTime' } })
