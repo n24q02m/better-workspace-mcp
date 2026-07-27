@@ -1,0 +1,35 @@
+# docker-compose.yml
+# Base compose file - stdio mode (default). For HTTP mode, layer the overlay:
+#   docker compose -f docker-compose.yml -f docker-compose.http.yml up
+#
+# Built from the local Dockerfile with an explicit target rather than pulled by
+# tag. CD builds the image with no `target`, so every published tag is the LAST
+# stage of the Dockerfile (http); `target:` is the only way to get the stdio one.
+services:
+  better-workspace-mcp:
+    build:
+      context: .
+      target: stdio
+    environment:
+      # Desktop OAuth client. stdio redirects the consent to a loopback port,
+      # which only a Desktop client may do - the http overlay swaps in the Web
+      # pair, and the two must never be pointed at the same client.
+      - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
+      - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}
+    # stdio talks over the container's stdin/stdout, so a client attaches with
+    # `docker compose run --rm -T better-workspace-mcp`. Plain `up` starts it with
+    # no peer on the other end.
+    stdin_open: true
+    # Where PerPluginStore writes: ~/.better-workspace-mcp of the image's `node`
+    # user - config.json plus the machine-bound .secret that decrypts it. Both
+    # have to persist together, so the whole directory is one volume.
+    #
+    # First-run consent does NOT work from inside the container: the OAuth flow
+    # stands its consent server on a loopback port, and the browser completing the
+    # consent is on the host, where 127.0.0.1 is a different machine. Authorize
+    # once outside Docker (`npx @n24q02m/better-workspace-mcp`) and bind-mount the
+    # resulting ~/.better-workspace-mcp here instead of using a named volume.
+    volumes:
+      - workspace-data:/home/node/.better-workspace-mcp
+volumes:
+  workspace-data:
