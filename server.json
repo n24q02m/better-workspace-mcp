@@ -1,10 +1,57 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.n24q02m/better-workspace-mcp",
   "description": "Google Workspace MCP server \u2014 Docs/Drive/Calendar/Gmail/Sheets/Slides/Tasks/Chat/People + multi-account",
   "version": "0.1.0",
   "repository": {
     "url": "https://github.com/n24q02m/better-workspace-mcp",
     "source": "github"
-  }
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@n24q02m/better-workspace-mcp",
+      "version": "0.1.0",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "description": "OAuth 2.0 Desktop client ID from Google Cloud Console (APIs & Services > Credentials)",
+          "isRequired": true,
+          "isSecret": false,
+          "name": "GOOGLE_OAUTH_CLIENT_ID"
+        },
+        {
+          "description": "OAuth 2.0 Desktop client secret (paired with the client ID above)",
+          "isRequired": true,
+          "isSecret": true,
+          "name": "GOOGLE_OAUTH_CLIENT_SECRET"
+        }
+      ]
+    },
+    {
+      "registryType": "oci",
+      "identifier": "docker.io/n24q02m/better-workspace-mcp:latest",
+      "runtimeHint": "docker",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "description": "OAuth 2.0 Desktop client ID from Google Cloud Console (APIs & Services > Credentials)",
+          "isRequired": true,
+          "isSecret": false,
+          "name": "GOOGLE_OAUTH_CLIENT_ID"
+        },
+        {
+          "description": "OAuth 2.0 Desktop client secret (paired with the client ID above)",
+          "isRequired": true,
+          "isSecret": true,
+          "name": "GOOGLE_OAUTH_CLIENT_SECRET"
+        }
+      ]
+    }
+  ]
 }
