@@ -182,7 +182,25 @@ jobs:
       # mcp-core removed it in "revert incorrect NPM_TOKEN env in CD workflow", so
       # keeping it here would reintroduce something the stack deliberately dropped.
       # --provenance needs id-token: write, granted at workflow level.
-      - run: npm publish --provenance --no-git-checks --tag ${{ needs.release.outputs.is_prerelease == 'true' && 'beta' || 'latest' }}
+      #
+      # Two guards, both copied from mcp-core after this repo hit the failures they
+      # prevent. The README check keeps the package page from reading "This package
+      # does not have a README" -- the tarball is what npm renders, not the repo. The
+      # already-published check makes a re-run possible: v0.1.0-beta.1 was published
+      # by hand after the first release failed here, and without this the re-run dies
+      # on "cannot publish over the previously published versions" and takes the MCP
+      # Registry job down with it.
+      - run: |
+          set -uo pipefail
+          npm pack --dry-run --json | grep -q '"path": *"README.md"' \
+            || { echo "::error::README.md missing from the npm tarball -- refusing to publish"; exit 1; }
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "@n24q02m/better-workspace-mcp@$VERSION" version 2>/dev/null; then
+            echo "@n24q02m/better-workspace-mcp@$VERSION already published, skipping"
+          else
+            TAG=${{ needs.release.outputs.is_prerelease == 'true' && 'beta' || 'latest' }}
+            npm publish --provenance --no-git-checks --tag "$TAG"
+          fi
 
   # ============================================================================
   # Build Docker (multi-arch: amd64 + arm64)
