@@ -13,17 +13,24 @@ List what is configured, and which one is primary, with
 `config(action="account_list")`. Naming an account that is not configured is an
 error -- the call is never silently rerouted to the primary.
 
-### Scopes, and the one re-consent some accounts need
+### Scopes
 
-Forms uses two scopes, both already requested on this server's consent screen:
-`forms.body` (`create`, `get`, `batchUpdate`) and `forms.responses.readonly`
-(`listResponses`, `getResponse`). Nothing new is asked for here.
+Forms uses two scopes, both already on this server's consent screen: `forms.body`
+(`create`, `get`, `batchUpdate`) and `forms.responses.readonly` (`listResponses`,
+`getResponse`). Nothing new is requested here.
 
-Google does not widen a token it has already issued, though. An account authorized
-*before* those two scopes were added to the consent screen still holds the older
-set, and its first Forms call fails with a Google permission error -- HTTP 403,
-usually reading `Request had insufficient authentication scopes`. That is not a bug
-in this tool and retrying will not clear it.
+Google accepts `https://www.googleapis.com/auth/drive` in place of either one --
+a form is a Drive file, and every Forms method this tool calls lists `drive` among
+its alternatives. This server has requested full `drive` since its first release,
+which is *before* the two Forms scopes were added, so an account authorized back
+then should still work without re-consenting.
+
+That matters because Google never widens a token it has already issued. If an
+account's grant somehow covers neither `drive` nor the Forms scopes -- Google lets
+a user withhold individual restricted scopes at the consent screen -- the first
+Forms call returns HTTP 403, usually reading `Request had insufficient
+authentication scopes`. That is not a bug in this tool, and retrying will not clear
+it.
 
 Fix it by re-authorizing that one account:
 
@@ -35,8 +42,6 @@ current scope set, and the account's stored record is replaced in place -- it ke
 its position and stays primary if it was primary. There is no need to
 `account_remove` first, and doing so would leave you with nothing if you then
 abandoned the consent screen.
-
-Accounts added after the scopes were requested never need this.
 
 ## Actions
 
