@@ -360,7 +360,7 @@ function escapeHtml(value: string): string {
 }
 
 function respond(res: ServerResponse, status: number, title: string, detail: string): void {
-  const body = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)}</title><body style="font-family:system-ui,sans-serif;max-width:34rem;margin:4rem auto;padding:0 1rem;line-height:1.5"><h1>${escapeHtml(title)}</h1><p>${escapeHtml(detail)}</p></body></html>`
+  const body = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)}</title><body style="font-family:system-ui,sans-serif;max-width:34rem;margin:4rem auto;padding:0 1rem;line-height:1.5"><h1>${escapeHtml(title)}</h1><p>${escapeHtml(detail)}</p></body></html>`
   res.writeHead(status, { 'content-type': 'text/html; charset=utf-8' })
   res.end(body)
 }
