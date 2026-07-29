@@ -608,20 +608,21 @@ export class DriveService {
       const buffer = Buffer.from(response.data as unknown as ArrayBuffer);
 
       // 3. Save to localPath
-      const absolutePath = path.isAbsolute(localPath)
-        ? localPath
-        : path.resolve(PROJECT_ROOT, localPath);
-      const dir = path.dirname(absolutePath);
+      if (!path.isAbsolute(localPath)) {
+        throw new Error('localPath must be an absolute path.');
+      }
+
+      const dir = path.dirname(localPath);
 
       await fs.promises.mkdir(dir, { recursive: true });
 
-      await fs.promises.writeFile(absolutePath, buffer);
+      await fs.promises.writeFile(localPath, buffer);
 
       return {
         content: [
           {
             type: 'text' as const,
-            text: `Successfully downloaded file ${metadata.data.name} to ${absolutePath}`,
+            text: `Successfully downloaded file ${metadata.data.name} to ${localPath}`,
           },
         ],
       };
