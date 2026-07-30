@@ -70,21 +70,24 @@ export class SheetsService {
       );
     }
 
-    const results: Array<{ sheetName: string; values: any[][] | null }> = [];
-    for (const sheetName of sheetNames) {
-      try {
-        const response = await sheets.spreadsheets.values.get({
-          spreadsheetId,
-          range: SheetsService.sheetRange(sheetName),
-        });
-        results.push({ sheetName, values: response.data.values || [] });
-      } catch (sheetError) {
-        logToFile(
-          `[SheetsService] Error reading sheet ${sheetName}: ${sheetError}`,
-        );
-        results.push({ sheetName, values: null });
-      }
-    }
+    // ⚡ Bolt: Fetch sheets concurrently with Promise.all to improve fallback performance
+    // Expected impact: Reduces fallback reading time from O(N) to O(1) concurrent latency
+    const results = await Promise.all(
+      sheetNames.map(async (sheetName) => {
+        try {
+          const response = await sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range: SheetsService.sheetRange(sheetName),
+          });
+          return { sheetName, values: response.data.values || [] };
+        } catch (sheetError) {
+          logToFile(
+            `[SheetsService] Error reading sheet ${sheetName}: ${sheetError}`,
+          );
+          return { sheetName, values: null };
+        }
+      })
+    );
     return results;
   }
 
