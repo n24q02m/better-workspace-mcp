@@ -852,16 +852,23 @@ export class CalendarService {
       }
 
       // Sort and merge overlapping busy intervals for better performance
-      const sortedBusyTimes = busyTimes
-        .filter((busy) => busy.start && busy.end)
-        .map((busy) => ({
-          start: new Date(busy.start!).getTime(),
-          end: new Date(busy.end!).getTime(),
-        }))
-        .sort((a, b) => a.start - b.start);
+      // Performance optimization: Inline filter and map into a single pass
+      // instead of using `.filter().map()` to avoid intermediate array allocations.
+      const parsedTimes: { start: number; end: number }[] = [];
+      for (let i = 0; i < busyTimes.length; i++) {
+        const busy = busyTimes[i];
+        if (busy.start && busy.end) {
+          parsedTimes.push({
+            start: new Date(busy.start).getTime(),
+            end: new Date(busy.end).getTime(),
+          });
+        }
+      }
+      parsedTimes.sort((a, b) => a.start - b.start);
 
       const mergedBusyTimes: { start: number; end: number }[] = [];
-      for (const busy of sortedBusyTimes) {
+      for (let i = 0; i < parsedTimes.length; i++) {
+        const busy = parsedTimes[i];
         if (mergedBusyTimes.length === 0) {
           mergedBusyTimes.push(busy);
         } else {

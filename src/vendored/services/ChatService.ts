@@ -159,18 +159,22 @@ export class ChatService {
       // The Chat API's spaces.list method does not support filtering by
       // displayName on the server. We must fetch all spaces and filter locally.
       let pageToken: string | undefined = undefined;
-      let allSpaces: chat_v1.Schema$Space[] = [];
+      const foundSpaces: chat_v1.Schema$Space[] = [];
 
       do {
         const res: any = await chat.spaces.list({ pageToken });
         const spaces = res.data.spaces || [];
-        allSpaces = allSpaces.concat(spaces);
+
+        // Performance optimization: Filter inline during pagination instead of
+        // accumulating all spaces into a single massive array with `.concat()`.
+        // Reduces memory overhead and avoids O(N^2) array reallocations for users in many spaces.
+        for (const space of spaces) {
+          if (space.displayName === displayName) {
+            foundSpaces.push(space);
+          }
+        }
         pageToken = res.data.nextPageToken || undefined;
       } while (pageToken);
-
-      const foundSpaces = allSpaces.filter(
-        (space) => space.displayName === displayName,
-      );
 
       if (foundSpaces.length > 0) {
         logToFile(
