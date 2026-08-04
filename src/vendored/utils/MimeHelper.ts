@@ -243,8 +243,9 @@ export class MimeHelper {
           : attachment.content.toString('base64');
 
       // Add content in chunks of 76 characters as per MIME spec
-      const chunks = content.match(/.{1,76}/g) || [];
-      messageParts.push(...chunks);
+      for (let i = 0; i < content.length; i += 76) {
+        messageParts.push(content.substring(i, i + 76));
+      }
     }
 
     // End boundary
