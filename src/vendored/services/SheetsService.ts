@@ -70,21 +70,26 @@ export class SheetsService {
       );
     }
 
-    const results: Array<{ sheetName: string; values: any[][] | null }> = [];
-    for (const sheetName of sheetNames) {
-      try {
-        const response = await sheets.spreadsheets.values.get({
-          spreadsheetId,
-          range: SheetsService.sheetRange(sheetName),
-        });
-        results.push({ sheetName, values: response.data.values || [] });
-      } catch (sheetError) {
-        logToFile(
-          `[SheetsService] Error reading sheet ${sheetName}: ${sheetError}`,
-        );
-        results.push({ sheetName, values: null });
-      }
-    }
+    // ⚡ Bolt Optimization:
+    // When batchGet fails, read all tabs concurrently rather than waiting for each
+    // sequentially in a loop. This significantly reduces total request latency
+    // by allowing network I/O to overlap, solving an N+1 performance bottleneck.
+    const results = await Promise.all(
+      sheetNames.map(async (sheetName) => {
+        try {
+          const response = await sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range: SheetsService.sheetRange(sheetName),
+          });
+          return { sheetName, values: response.data.values || [] };
+        } catch (sheetError) {
+          logToFile(
+            `[SheetsService] Error reading sheet ${sheetName}: ${sheetError}`,
+          );
+          return { sheetName, values: null };
+        }
+      })
+    );
     return results;
   }
 
