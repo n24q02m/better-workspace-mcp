@@ -37,6 +37,8 @@ function get(path: string) {
   return { url: path, headers: {} } as never
 }
 
+const originalFetch = globalThis.fetch
+
 beforeEach(() => {
   setEnv()
   resetNonceStoreForTesting()
@@ -44,7 +46,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks()
-  vi.unstubAllGlobals()
+  globalThis.fetch = originalFetch
 })
 
 describe('state token', () => {
@@ -176,16 +178,11 @@ describe('callback gate', () => {
   })
 
   it('refuses an expired state', async () => {
-    vi.useFakeTimers()
-    try {
-      const state = signState('sub-1')
-      vi.advanceTimersByTime(STATE_TTL_MS + 1000)
-      const res = fakeRes()
-      await handleAccountCallback(get(`/accounts/callback?code=abc&state=${state}`), res as never)
-      expect(res.status).toBe(400)
-    } finally {
-      vi.useRealTimers()
-    }
+    const now = Date.now()
+    const state = signState('sub-1', { now: now - STATE_TTL_MS - 1000 })
+    const res = fakeRes()
+    await handleAccountCallback(get(`/accounts/callback?code=abc&state=${state}`), res as never)
+    expect(res.status).toBe(400)
   })
 
   // A caller with no valid state gets the same 400 whether or not they also sent
@@ -250,10 +247,9 @@ describe('callback success path', () => {
       return { saveTokens } as never
     })
     vi.spyOn(credentialState, 'resolveCredentialState').mockResolvedValue('configured')
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response(JSON.stringify({ access_token: 'at', id_token: 'x' }), { status: 200 }))
-    )
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ access_token: 'at', id_token: 'x' }), { status: 200 })
+    ) as never
   })
 
   it('stores the account inside the subject scope taken from the state', async () => {
@@ -285,10 +281,7 @@ describe('callback success path', () => {
   })
 
   it('reports a failed token exchange without storing anything', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response('invalid_grant', { status: 400 }))
-    )
+    globalThis.fetch = vi.fn(async () => new Response('invalid_grant', { status: 400 })) as never
     const res = fakeRes()
     await handleAccountCallback(get(`/accounts/callback?code=abc&state=${signState('s')}`), res as never)
     expect(res.status).toBe(500)
@@ -411,12 +404,9 @@ describe('callback success path', () => {
     process.env.MCP_STORAGE_BACKEND = 'cf-kv'
     process.env.MCP_KV_BASE_URL = 'http://kv.internal'
     resetNonceStoreForTesting()
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => {
-        throw new Error('kv unreachable')
-      })
-    )
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error('kv unreachable')
+    }) as never
     try {
       const res = fakeRes()
       await handleAccountCallback(get(`/accounts/callback?code=a&state=${signState('sub-1')}`), res as never)
