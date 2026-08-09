@@ -1,0 +1,3 @@
+## 2024-08-09 - [Security Headers and Dark Mode in Inline HTML]
+**Learning:** Returning inline HTML string directly from Node.js lacks the security defaults of frameworks (like CSP, X-Frame-Options) and OS-level color scheme awareness by default.
+**Action:** When creating raw HTML string responses, ensure standard security headers are added to `res.writeHead()` and include a `<meta name="color-scheme" content="light dark">` in the HTML head along with semantic elements like `<main>`.
