@@ -90,6 +90,7 @@ describe('Task 10 live tool-name contract', () => {
 
     for (const name of actualNames) {
       expect(name).toMatch(/^[a-z][a-z0-9_]*$/)
+      expect(name.split('_').length).toBeLessThanOrEqual(2)
       expect(name.length).toBeLessThanOrEqual(20)
       expect(name).not.toMatch(/[A-Z.-]|__|^config__/)
       expect(`${CLIENT_PREFIX}${name}`).toHaveLength(CLIENT_PREFIX.length + name.length)
