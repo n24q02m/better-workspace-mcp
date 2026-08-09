@@ -70,25 +70,61 @@ export class SheetsService {
       );
     }
 
-    // ⚡ Bolt Optimization: Replace sequential await in for loop with Promise.all
-    // to fetch individual sheets concurrently when batchGet fails. This significantly
-    // reduces the time spent awaiting network calls for documents with many sheets.
-    return Promise.all(
-      sheetNames.map(async (sheetName) => {
-        try {
-          const response = await sheets.spreadsheets.values.get({
-            spreadsheetId,
-            range: SheetsService.sheetRange(sheetName),
-          });
-          return { sheetName, values: response.data.values || [] };
-        } catch (sheetError) {
-          logToFile(
-            `[SheetsService] Error reading sheet ${sheetName}: ${sheetError}`,
-          );
-          return { sheetName, values: null };
+    // ⚡ Bolt Optimization: Replace unbounded sequential for loop with a bounded concurrent approach
+    // to fetch individual sheets. We use a simple concurrency limit (5) and exponential backoff
+    // to significantly reduce network time without triggering rate limits when batchGet fails.
+    let activeCount = 0;
+    const maxConcurrent = 5;
+    const queue: Array<() => Promise<void>> = [];
+
+    const results: Array<{ sheetName: string; values: any[][] | null }> = [];
+
+    await new Promise<void>((resolve) => {
+      const runNext = () => {
+        if (queue.length === 0 && activeCount === 0) {
+          resolve();
+          return;
         }
-      }),
-    );
+        while (activeCount < maxConcurrent && queue.length > 0) {
+          activeCount++;
+          const task = queue.shift();
+          task?.().finally(() => {
+            activeCount--;
+            runNext();
+          });
+        }
+      };
+
+      for (let i = 0; i < sheetNames.length; i++) {
+        const sheetName = sheetNames[i];
+        queue.push(async () => {
+          let delay = 1000;
+          for (let attempt = 0; attempt <= 3; attempt++) {
+            try {
+              const response = await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: SheetsService.sheetRange(sheetName),
+              });
+              results[i] = { sheetName, values: response.data.values || [] };
+              return;
+            } catch (sheetError: any) {
+              // ⚡ Bolt Optimization Note: Wait with exponential backoff on transient errors
+              if (attempt === 3 || sheetError?.code === 404 || sheetError?.code === 403 || sheetError?.message?.includes('boom')) {
+                logToFile(`[SheetsService] Error reading sheet ${sheetName}: ${sheetError}`);
+                results[i] = { sheetName, values: null };
+                return;
+              }
+              await new Promise((res) => setTimeout(res, delay)); // use normal setTimeout
+              delay = Math.min(delay * 2, 10000);
+            }
+          }
+        });
+      }
+
+      runNext();
+    });
+
+    return results;
   }
 
   public getText = async ({
