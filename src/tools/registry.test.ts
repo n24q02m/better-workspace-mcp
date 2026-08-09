@@ -231,6 +231,19 @@ describe('registerTools', () => {
       expect(result).toEqual(mockResult)
     })
 
+    it('preserves factory unknown-action validation for local stdio calls', async () => {
+      const handler = getHandler(server, 'tools/call')
+
+      const result = await handler({
+        method: 'tools/call',
+        params: { name: 'time', arguments: { action: 'bogus' } }
+      })
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toContain('Unknown action: bogus')
+      expect(result.content[0].text).toContain('Valid actions')
+    })
+
     it('rejects a raw remote downloadFile request before it reaches DriveService', async () => {
       const remoteServer = createServer()
       registerTools(remoteServer, { allowLocalFilesystem: false })

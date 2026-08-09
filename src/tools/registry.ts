@@ -258,7 +258,7 @@ export function registerTools(
       const domain = DOMAIN_MAP.get(name)
       if (domain) {
         const action = (args as DomainRunInput).action
-        if (!availableActions(domain, allowLocalFilesystem).includes(action)) {
+        if (!allowLocalFilesystem && domain.localOnlyActions?.includes(action)) {
           if (name === 'drive' && action === 'downloadFile') {
             throw new WorkspaceMCPError(
               'downloadFile is only available in local stdio mode.',
