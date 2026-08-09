@@ -167,6 +167,7 @@ describe('callback gate', () => {
     await handleAccountCallback(get('/accounts/callback?code=abc'), res as never)
     expect(res.status).toBe(400)
     expect(res.body).not.toContain('abc')
+    expect(res.writeHead).toHaveBeenCalledWith(400, expect.objectContaining({ 'Referrer-Policy': 'no-referrer' }))
   })
 
   it('refuses a state that does not verify', async () => {
