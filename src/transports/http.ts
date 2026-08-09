@@ -127,7 +127,7 @@ export async function startHttp(): Promise<void> {
         { name: SERVER_NAME, version: getPackageVersion() },
         { capabilities: { tools: {}, resources: {} } }
       )
-      registerTools(server)
+      registerTools(server, { allowLocalFilesystem: false })
       return server as unknown as McpServer
     },
     {

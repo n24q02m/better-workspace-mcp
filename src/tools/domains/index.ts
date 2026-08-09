@@ -25,6 +25,8 @@ export interface DomainDef {
   description: string // tool description (actions summary)
   actions: readonly string[] // = the vendored service method names
   inputProps: Record<string, unknown> // JSON-schema properties beyond action+account
+  localOnlyActions?: readonly string[] // unavailable to remote HTTP clients
+  localOnlyInputProps?: readonly string[] // omitted with their local-only actions
   run: (input: DomainRunInput) => Promise<CallToolResult>
 }
 
@@ -74,10 +76,10 @@ export const DOMAINS: DomainDef[] = [
   {
     name: 'drive',
     description:
-      'Drive operations. Actions: ' +
-      DRIVE_ACTIONS.join(', ') +
-      '. account = email of the Google account to use (default: primary).',
+      'Drive operations. See the action enum for operations available in this transport. account = email of the Google account to use (default: primary).',
     actions: DRIVE_ACTIONS,
+    localOnlyActions: ['downloadFile'],
+    localOnlyInputProps: ['localPath'],
     inputProps: {
       fileId: { type: 'string' },
       folderId: { type: 'string' },
@@ -86,7 +88,12 @@ export const DOMAINS: DomainDef[] = [
       name: { type: 'string' },
       newName: { type: 'string' },
       parentId: { type: 'string' },
-      destinationFolderId: { type: 'string' }
+      destinationFolderId: { type: 'string' },
+      localPath: {
+        type: 'string',
+        description:
+          'Local destination path for downloadFile. This action is available only over local stdio transport.'
+      }
     },
     run: drive
   },

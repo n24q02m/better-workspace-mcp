@@ -5,6 +5,20 @@ vi.mock('./domains/docs.js', () => ({
   DOCS_ACTIONS: ['getText', 'create', 'writeText', 'getSuggestions', 'replaceText', 'formatText']
 }))
 
+vi.mock('./domains/drive.js', () => ({
+  drive: vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'downloaded' }] })),
+  DRIVE_ACTIONS: [
+    'findFolder',
+    'createFolder',
+    'search',
+    'trashFile',
+    'renameFile',
+    'getComments',
+    'moveFile',
+    'downloadFile'
+  ]
+}))
+
 vi.mock('./config.js', () => ({ config: vi.fn() }))
 
 vi.mock('../auth/credential-state.js', () => ({ getState: vi.fn(() => 'configured') }))
@@ -31,6 +45,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { getState } from '../auth/credential-state.js'
 import { config } from './config.js'
 import { docs } from './domains/docs.js'
+import { drive } from './domains/drive.js'
 import { DOMAINS } from './domains/index.js'
 import { WorkspaceMCPError } from './helpers/errors.js'
 import { registerTools } from './registry.js'
@@ -98,6 +113,16 @@ describe('registerTools', () => {
         'replaceText',
         'formatText'
       ])
+    })
+
+    it('does not advertise Drive filesystem writes to remote clients', async () => {
+      const remoteServer = createServer()
+      registerTools(remoteServer, { allowLocalFilesystem: false })
+
+      const result = await getHandler(remoteServer, 'tools/list')({ method: 'tools/list' })
+      const driveTool = result.tools.find((tool: any) => tool.name === 'drive')
+
+      expect(driveTool.inputSchema.properties.action.enum).not.toContain('downloadFile')
     })
   })
 
@@ -204,6 +229,24 @@ describe('registerTools', () => {
 
       expect(docs).toHaveBeenCalledWith({ action: 'getText', documentId: 'd' })
       expect(result).toEqual(mockResult)
+    })
+
+    it('rejects a raw remote downloadFile request before it reaches DriveService', async () => {
+      const remoteServer = createServer()
+      registerTools(remoteServer, { allowLocalFilesystem: false })
+      const handler = getHandler(remoteServer, 'tools/call')
+
+      const result = await handler({
+        method: 'tools/call',
+        params: {
+          name: 'drive',
+          arguments: { action: 'downloadFile', fileId: 'file-id', localPath: '../../outside.txt' }
+        }
+      })
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toContain('downloadFile is only available in local stdio mode')
+      expect(drive).not.toHaveBeenCalled()
     })
 
     it('dispatches to config and returns its result directly (no re-wrapping)', async () => {
