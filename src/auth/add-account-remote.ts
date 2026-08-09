@@ -363,7 +363,10 @@ function respond(res: ServerResponse, status: number, title: string, detail: str
   const body = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)}</title><body style="font-family:system-ui,sans-serif;max-width:34rem;margin:4rem auto;padding:0 1rem;line-height:1.5"><h1>${escapeHtml(title)}</h1><p>${escapeHtml(detail)}</p></body></html>`
   res.writeHead(status, {
     'content-type': 'text/html; charset=utf-8',
-    'Referrer-Policy': 'no-referrer'
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'no-referrer',
+    'Content-Security-Policy': "default-src 'none'",
+    'X-Frame-Options': 'DENY'
   })
   res.end(body)
 }
