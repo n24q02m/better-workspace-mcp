@@ -52,7 +52,7 @@ jobs:
           fi
 
           echo "Bot PR detected on internal branch: $BRANCH"
-          gh pr edit "$PR_NUMBER" --add-label "bot-generated" --repo "$REPO"
+          gh pr edit "$PR_NUMBER" --add-label "bot-generated" --repo "$REPO" || true
 
           # --- Rate limit: max 5 bot PRs/actor/day ---
           SINCE="$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)"
@@ -100,7 +100,7 @@ jobs:
 
           echo "Similar open PRs for '$KEYWORD': $DUPES"
           if (( DUPES >= 1 )); then
-            gh pr edit "$PR_NUMBER" --add-label "possible-duplicate" --repo "$REPO"
+            gh pr edit "$PR_NUMBER" --add-label "possible-duplicate" --repo "$REPO" || true
             gh pr comment "$PR_NUMBER" --repo "$REPO" \
               --body "**Possible duplicate**: found ${DUPES} open PR(s) with similar title ('$KEYWORD'). Check before merging."
           fi
