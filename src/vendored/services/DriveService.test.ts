@@ -1,8 +1,9 @@
 import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { filesGet, mkdir, writeFile } = vi.hoisted(() => ({
+const { filesGet, filesList, mkdir, writeFile } = vi.hoisted(() => ({
   filesGet: vi.fn(),
+  filesList: vi.fn(),
   mkdir: vi.fn(),
   writeFile: vi.fn()
 }))
@@ -20,7 +21,7 @@ vi.mock('node:fs', async () => {
 })
 
 vi.mock('googleapis', () => ({
-  google: { drive: () => ({ files: { get: filesGet } }) }
+  google: { drive: () => ({ files: { get: filesGet, list: filesList } }) }
 }))
 
 import { AuthManager } from '../auth/AuthManager.js'
@@ -32,10 +33,12 @@ const fileId = 'local-contract-file-id-12345'
 describe('DriveService downloadFile local filesystem contract', () => {
   beforeEach(() => {
     filesGet.mockReset()
+    filesList.mockReset()
     mkdir.mockReset()
     writeFile.mockReset()
     mkdir.mockResolvedValue(undefined)
     writeFile.mockResolvedValue(undefined)
+    filesList.mockResolvedValue({ data: { files: [] } })
     filesGet
       .mockResolvedValueOnce({
         data: { name: 'report.pdf', mimeType: 'application/pdf' }
@@ -84,5 +87,46 @@ describe('DriveService downloadFile local filesystem contract', () => {
 
     expect(expectedPath).toContain('%2e%2e')
     expect(writeFile).toHaveBeenCalledWith(expectedPath, expect.any(Buffer))
+  })
+})
+
+describe('DriveService search URL hostname validation', () => {
+  beforeEach(() => {
+    filesGet.mockReset()
+    filesList.mockReset()
+    filesList.mockResolvedValue({ data: { files: [] } })
+  })
+
+  it.each([
+    'drive.google.com.attacker.example',
+    'docs.google.com.attacker.example'
+  ])('does not treat a URL with a forged %s hostname as a Google Drive URL', async (hostname) => {
+    const query = `https://${hostname}/file/d/attacker-file-id-12345678901234567890`
+    const service = new DriveService(new AuthManager(['scope']))
+
+    await service.search({ query })
+
+    expect(filesGet).not.toHaveBeenCalled()
+    expect(filesList).toHaveBeenCalledWith(expect.objectContaining({
+      q: `fullText contains '${query}'`
+    }))
+  })
+
+  it.each([
+    ['drive.google.com', 'drive-file-id-12345678901234567890'],
+    ['docs.google.com', 'docs-file-id-12345678901234567890']
+  ])('still treats the exact %s hostname as a Google Drive URL', async (hostname, fileId) => {
+    const service = new DriveService(new AuthManager(['scope']))
+    filesGet.mockReset()
+    filesGet.mockResolvedValue({ data: { id: fileId, name: 'report.pdf' } })
+
+    await service.search({ query: `https://${hostname}/file/d/${fileId}` })
+
+    expect(filesGet).toHaveBeenCalledWith({
+      fileId,
+      fields: 'id, name, modifiedTime, viewedByMeTime, mimeType, parents',
+      supportsAllDrives: true
+    })
+    expect(filesList).not.toHaveBeenCalled()
   })
 })
