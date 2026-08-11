@@ -16,6 +16,16 @@ import { PROJECT_ROOT } from '../utils/paths';
 
 const MIN_DRIVE_ID_LENGTH = 25;
 
+const GOOGLE_DRIVE_HOSTNAMES = new Set(['drive.google.com', 'docs.google.com']);
+
+function isGoogleDriveUrl(value: string): boolean {
+  try {
+    return GOOGLE_DRIVE_HOSTNAMES.has(new URL(value).hostname);
+  } catch {
+    return false;
+  }
+}
+
 const URL_PATTERNS = [
   { pattern: /\/folders\/([a-zA-Z0-9-_]+)/, type: 'folder' as const },
   { pattern: /\/file\/d\/([a-zA-Z0-9-_]+)/, type: 'file' as const },
@@ -163,7 +173,7 @@ export class DriveService {
     // Check if query is a Google Drive URL
     if (
       query &&
-      (query.includes('drive.google.com') || query.includes('docs.google.com'))
+      isGoogleDriveUrl(query)
     ) {
       isProcessed = true;
       logToFile(`Detected Google Drive URL in query: ${query}`);
