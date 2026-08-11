@@ -17,6 +17,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js'
 import { getState } from '../auth/credential-state.js'
 import { config } from './config.js'
+import type { DomainRunInput } from './domains/factory.js'
 import { DOMAINS, type DomainDef } from './domains/index.js'
 import { aiReadableMessage, findClosestMatch, WorkspaceMCPError } from './helpers/errors.js'
 
@@ -62,7 +63,20 @@ const VALID_HELP_TOPICS_STRING = HELP_TOPICS.join(', ')
  * comes from `actions`, extra params from `inputProps`, and `account` is
  * appended for every domain (selects which Google account the call acts as).
  */
-function domainToolDef(domain: DomainDef) {
+function availableActions(domain: DomainDef, allowLocalFilesystem: boolean): readonly string[] {
+  if (allowLocalFilesystem || !domain.localOnlyActions) return domain.actions
+  return domain.actions.filter((action) => !domain.localOnlyActions!.includes(action))
+}
+
+function availableInputProps(domain: DomainDef, allowLocalFilesystem: boolean): Record<string, unknown> {
+  if (allowLocalFilesystem || !domain.localOnlyInputProps) return domain.inputProps
+  return Object.fromEntries(
+    Object.entries(domain.inputProps).filter(([name]) => !domain.localOnlyInputProps!.includes(name))
+  )
+}
+
+function domainToolDef(domain: DomainDef, allowLocalFilesystem: boolean) {
+  const actions = availableActions(domain, allowLocalFilesystem)
   return {
     name: domain.name,
     description: domain.description,
@@ -76,12 +90,12 @@ function domainToolDef(domain: DomainDef) {
     inputSchema: {
       type: 'object',
       properties: {
-        action: { type: 'string', enum: [...domain.actions], description: 'Action to perform' },
+        action: { type: 'string', enum: [...actions], description: 'Action to perform' },
         account: {
           type: 'string',
           description: 'Google account email to act as. Defaults to the primary account (config action="account_list").'
         },
-        ...domain.inputProps
+        ...availableInputProps(domain, allowLocalFilesystem)
       },
       required: ['action']
     }
@@ -91,8 +105,7 @@ function domainToolDef(domain: DomainDef) {
 /**
  * N=1 domain now (docs). Task 7 appends 9 more entries to DOMAINS, not here.
  */
-const TOOLS = [
-  ...DOMAINS.map(domainToolDef),
+const INFRA_TOOLS = [
   {
     name: 'config',
     description:
@@ -153,22 +166,30 @@ const TOOLS = [
   }
 ]
 
-const ALL_TOOL_NAMES = TOOLS.map((t) => t.name)
-const ALL_TOOL_NAMES_STRING = ALL_TOOL_NAMES.join(', ')
+function toolDefinitions(allowLocalFilesystem: boolean) {
+  return [...DOMAINS.map((domain) => domainToolDef(domain, allowLocalFilesystem)), ...INFRA_TOOLS]
+}
 
 /**
  * Dispatch map for domain mega-tools, keyed by domain name. Each entry
  * returns the MCP CallTool result shape directly (no re-wrapping). Task 7
  * appends 9 more entries to DOMAINS, not here.
  */
-const DOMAIN_MAP = new Map(DOMAINS.map((d) => [d.name, d.run]))
+const DOMAIN_MAP = new Map(DOMAINS.map((domain) => [domain.name, domain]))
 
 /**
  * Register all tools with the MCP server. Single-account M1 -- no client factory.
  */
-export function registerTools(server: Server) {
+export function registerTools(
+  server: Server,
+  { allowLocalFilesystem = true }: { allowLocalFilesystem?: boolean } = {}
+) {
+  const tools = toolDefinitions(allowLocalFilesystem)
+  const allToolNames = tools.map((tool) => tool.name)
+  const allToolNamesString = allToolNames.join(', ')
+
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: TOOLS
+    tools
   }))
 
   // Resources handlers for full documentation
@@ -234,9 +255,24 @@ export function registerTools(server: Server) {
     }
 
     try {
-      const domainRun = DOMAIN_MAP.get(name)
-      if (domainRun) {
-        return await domainRun(args as any)
+      const domain = DOMAIN_MAP.get(name)
+      if (domain) {
+        const action = (args as DomainRunInput).action
+        if (!allowLocalFilesystem && domain.localOnlyActions?.includes(action)) {
+          if (name === 'drive' && action === 'downloadFile') {
+            throw new WorkspaceMCPError(
+              'downloadFile is only available in local stdio mode.',
+              'VALIDATION_ERROR',
+              'Use a local stdio server to download a Drive file to the local filesystem.'
+            )
+          }
+          throw new WorkspaceMCPError(
+            `Action not available in this transport: ${action}`,
+            'VALIDATION_ERROR',
+            'Use an action listed in the tool schema.'
+          )
+        }
+        return await domain.run(args as any)
       }
 
       switch (name) {
@@ -271,12 +307,12 @@ export function registerTools(server: Server) {
         }
 
         default: {
-          const closest = findClosestMatch(name, ALL_TOOL_NAMES)
+          const closest = findClosestMatch(name, allToolNames)
           const suggestion = closest ? ` Did you mean '${closest}'?` : ''
           throw new WorkspaceMCPError(
             `Unknown tool: ${name}.${suggestion}`,
             'UNKNOWN_TOOL',
-            `Available tools: ${ALL_TOOL_NAMES_STRING}`
+            `Available tools: ${allToolNamesString}`
           )
         }
       }
