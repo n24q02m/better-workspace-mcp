@@ -174,7 +174,8 @@ describe('callback gate', () => {
         'X-Content-Type-Options': 'nosniff',
         'Referrer-Policy': 'no-referrer',
         'Content-Security-Policy': expect.stringContaining("default-src 'none'"),
-        'X-Frame-Options': 'DENY'
+        'X-Frame-Options': 'DENY',
+        'Cache-Control': 'no-store'
       })
     )
   })

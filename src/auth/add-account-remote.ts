@@ -360,13 +360,14 @@ function escapeHtml(value: string): string {
 }
 
 function respond(res: ServerResponse, status: number, title: string, detail: string): void {
-  const body = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)}</title><body style="font-family:system-ui,sans-serif;max-width:34rem;margin:4rem auto;padding:0 1rem;line-height:1.5"><h1>${escapeHtml(title)}</h1><p>${escapeHtml(detail)}</p></body></html>`
+  const body = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>${escapeHtml(title)}</title><body style="font-family:system-ui,sans-serif;max-width:34rem;margin:4rem auto;padding:0 1rem;line-height:1.5"><main><h1>${escapeHtml(title)}</h1><p>${escapeHtml(detail)}</p></main></body></html>`
   res.writeHead(status, {
     'content-type': 'text/html; charset=utf-8',
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'no-referrer',
     'Content-Security-Policy': "default-src 'none'",
-    'X-Frame-Options': 'DENY'
+    'X-Frame-Options': 'DENY',
+    'Cache-Control': 'no-store'
   })
   res.end(body)
 }
