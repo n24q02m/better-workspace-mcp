@@ -360,7 +360,11 @@ function escapeHtml(value: string): string {
 }
 
 function respond(res: ServerResponse, status: number, title: string, detail: string): void {
-  const body = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>${escapeHtml(title)}</title><body style="font-family:system-ui,sans-serif;max-width:34rem;margin:4rem auto;padding:0 1rem;line-height:1.5"><main><h1>${escapeHtml(title)}</h1><p>${escapeHtml(detail)}</p></main></body></html>`
+  const icon =
+    status === 200
+      ? `<svg aria-hidden="true" viewBox="0 0 24 24" style="width:3rem;height:3rem;color:#10b981;margin-bottom:1rem;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`
+      : `<svg aria-hidden="true" viewBox="0 0 24 24" style="width:3rem;height:3rem;color:#ef4444;margin-bottom:1rem;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`
+  const body = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>${escapeHtml(title)}</title><body style="font-family:system-ui,sans-serif;max-width:34rem;margin:4rem auto;padding:0 1rem;line-height:1.5;text-align:center"><main style="display:flex;flex-direction:column;align-items:center">${icon}<h1 style="margin-top:0">${escapeHtml(title)}</h1><p>${escapeHtml(detail)}</p></main></body></html>`
   res.writeHead(status, {
     'content-type': 'text/html; charset=utf-8',
     'X-Content-Type-Options': 'nosniff',
