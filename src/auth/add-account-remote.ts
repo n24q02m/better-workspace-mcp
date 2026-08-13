@@ -376,6 +376,7 @@ function respond(res: ServerResponse, status: number, title: string, detail: str
     'Referrer-Policy': 'no-referrer',
     'Content-Security-Policy': `default-src 'none'; style-src 'sha256-${CALLBACK_STYLE_HASH}'`,
     'X-Frame-Options': 'DENY',
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
     'Cache-Control': 'no-store'
   })
   res.end(body)
