@@ -16,7 +16,7 @@
  * isolation failure `deriveSubjectStrict` exists to prevent, arriving by a
  * different road.
  */
-import { createHmac, hkdfSync, randomBytes, timingSafeEqual } from 'node:crypto'
+import { createHash, createHmac, hkdfSync, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { HttpRoute } from '@n24q02m/mcp-core'
 import { type SessionKv, wrapKvBackendAsSessionKv } from '@n24q02m/mcp-core/auth'
@@ -359,17 +359,22 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;')
 }
 
+const CALLBACK_CSS =
+  'body{font-family:system-ui,sans-serif;max-width:34rem;margin:4rem auto;padding:0 1rem;line-height:1.5;text-align:center}main{display:flex;flex-direction:column;align-items:center}.feedback-icon{width:3rem;height:3rem;margin-bottom:1rem}.feedback-icon--success{color:#10b981}.feedback-icon--error{color:#ef4444}h1{margin-top:0}'
+const CALLBACK_STYLE_HASH = createHash('sha256').update(CALLBACK_CSS).digest('base64')
+
 function respond(res: ServerResponse, status: number, title: string, detail: string): void {
+  const iconClass = status === 200 ? 'feedback-icon--success' : 'feedback-icon--error'
   const icon =
     status === 200
-      ? `<svg aria-hidden="true" viewBox="0 0 24 24" style="width:3rem;height:3rem;color:#10b981;margin-bottom:1rem;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`
-      : `<svg aria-hidden="true" viewBox="0 0 24 24" style="width:3rem;height:3rem;color:#ef4444;margin-bottom:1rem;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`
-  const body = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>${escapeHtml(title)}</title><body style="font-family:system-ui,sans-serif;max-width:34rem;margin:4rem auto;padding:0 1rem;line-height:1.5;text-align:center"><main style="display:flex;flex-direction:column;align-items:center">${icon}<h1 style="margin-top:0">${escapeHtml(title)}</h1><p>${escapeHtml(detail)}</p></main></body></html>`
+      ? `<svg aria-hidden="true" class="feedback-icon ${iconClass}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`
+      : `<svg aria-hidden="true" class="feedback-icon ${iconClass}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`
+  const body = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>${escapeHtml(title)}</title><style>${CALLBACK_CSS}</style><body><main>${icon}<h1>${escapeHtml(title)}</h1><p>${escapeHtml(detail)}</p></main></body></html>`
   res.writeHead(status, {
     'content-type': 'text/html; charset=utf-8',
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'no-referrer',
-    'Content-Security-Policy': "default-src 'none'",
+    'Content-Security-Policy': `default-src 'none'; style-src 'sha256-${CALLBACK_STYLE_HASH}'`,
     'X-Frame-Options': 'DENY',
     'Cache-Control': 'no-store'
   })
