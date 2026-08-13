@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ACCOUNT_CALLBACK_PATH,
@@ -29,6 +30,9 @@ function fakeRes() {
     },
     get body(): string {
       return (this.end.mock.calls[0]?.[0] as string) ?? ''
+    },
+    get headers(): Record<string, string> {
+      return (this.writeHead.mock.calls[0]?.[1] as Record<string, string>) ?? {}
     }
   }
 }
@@ -167,6 +171,17 @@ describe('callback gate', () => {
     await handleAccountCallback(get('/accounts/callback?code=abc'), res as never)
     expect(res.status).toBe(400)
     expect(res.body).not.toContain('abc')
+    expect(res.body).toContain('<svg aria-hidden="true"')
+    expect(res.body).toContain('class="feedback-icon feedback-icon--error"')
+    expect(res.body).toContain('<circle cx="12" cy="12" r="10"></circle>')
+    expect(res.body).not.toContain('class="feedback-icon feedback-icon--success"')
+    expect(res.body).not.toContain(' style=')
+    const css = res.body.match(/<style>([\s\S]+)<\/style>/)?.[1]
+    expect(css).toBeTruthy()
+    const expectedStyleHash = createHash('sha256')
+      .update(css ?? '')
+      .digest('base64')
+    expect(res.headers['Content-Security-Policy']).toBe(`default-src 'none'; style-src 'sha256-${expectedStyleHash}'`)
     expect(res.writeHead).toHaveBeenCalledWith(
       400,
       expect.objectContaining({
@@ -272,6 +287,12 @@ describe('callback success path', () => {
     await handleAccountCallback(get(`/accounts/callback?code=abc&state=${signState('sub-from-jwt')}`), res as never)
     expect(res.status).toBe(200)
     expect(res.body).toContain('added@example.com')
+    expect(res.body).toContain('<svg aria-hidden="true"')
+    expect(res.body).toContain('class="feedback-icon feedback-icon--success"')
+    expect(res.body).toContain('<polyline points="22 4 12 14.01 9 11.01"></polyline>')
+    expect(res.body).not.toContain('class="feedback-icon feedback-icon--error"')
+    expect(res.body).not.toContain(' style=')
+    expect(res.body).toContain('<h1>Account added</h1>')
     // The bucket comes from the CALLER's JWT sub, never from the new account.
     expect(seenSubjects).toEqual(['sub-from-jwt'])
   })
