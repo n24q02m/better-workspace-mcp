@@ -365,11 +365,12 @@ const CALLBACK_STYLE_HASH = createHash('sha256').update(CALLBACK_CSS).digest('ba
 
 function respond(res: ServerResponse, status: number, title: string, detail: string): void {
   const iconClass = status === 200 ? 'feedback-icon--success' : 'feedback-icon--error'
+  const role = status === 200 ? 'status' : 'alert'
   const icon =
     status === 200
       ? `<svg aria-hidden="true" class="feedback-icon ${iconClass}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`
       : `<svg aria-hidden="true" class="feedback-icon ${iconClass}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`
-  const body = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>${escapeHtml(title)}</title><style>${CALLBACK_CSS}</style><body><main>${icon}<h1>${escapeHtml(title)}</h1><p>${escapeHtml(detail)}</p></main></body></html>`
+  const body = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>${escapeHtml(title)}</title><style>${CALLBACK_CSS}</style><body><main role="${role}">${icon}<h1>${escapeHtml(title)}</h1><p>${escapeHtml(detail)}</p></main></body></html>`
   res.writeHead(status, {
     'content-type': 'text/html; charset=utf-8',
     'X-Content-Type-Options': 'nosniff',
