@@ -190,6 +190,7 @@ describe('callback gate', () => {
         'Referrer-Policy': 'no-referrer',
         'Content-Security-Policy': expect.stringContaining("default-src 'none'"),
         'X-Frame-Options': 'DENY',
+        'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
         'Cache-Control': 'no-store'
       })
     )
