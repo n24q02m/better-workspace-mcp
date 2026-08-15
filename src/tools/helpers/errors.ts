@@ -177,10 +177,7 @@ export function findClosestMatch(input: string, validOptions: string[]): string 
   const lower = input.toLowerCase()
   let bestMatch: string | null = null
   let bestScore = 0
-
-  // Pre-calculate input bigrams outside the loop to avoid redundant allocations
-  const inputBigrams = new Set<string>()
-  for (let i = 0; i < lower.length - 1; i++) inputBigrams.add(lower.slice(i, i + 2))
+  const len1 = lower.length - 1
 
   for (const option of validOptions) {
     const optionLower = option.toLowerCase()
@@ -188,15 +185,30 @@ export function findClosestMatch(input: string, validOptions: string[]): string 
     if (optionLower.startsWith(lower) || lower.startsWith(optionLower)) {
       return option
     }
-    // Simple bigram similarity
-    const optionBigrams = new Set<string>()
-    for (let i = 0; i < optionLower.length - 1; i++) optionBigrams.add(optionLower.slice(i, i + 2))
 
+    // Simple bigram similarity without Set allocations
+    const len2 = optionLower.length - 1
     let overlap = 0
-    for (const b of inputBigrams) {
-      if (optionBigrams.has(b)) overlap++
+
+    if (len1 > 0 && len2 > 0) {
+      const matched = new Uint8Array(len2)
+      for (let i = 0; i < len1; i++) {
+        const c1 = lower.charCodeAt(i)
+        const c2 = lower.charCodeAt(i + 1)
+        for (let j = 0; j < len2; j++) {
+          if (matched[j] === 0 && optionLower.charCodeAt(j) === c1 && optionLower.charCodeAt(j + 1) === c2) {
+            matched[j] = 1
+            overlap++
+            break
+          }
+        }
+      }
     }
-    const score = (2 * overlap) / (inputBigrams.size + optionBigrams.size)
+
+    // Previous implementation used inputBigrams.size + optionBigrams.size, which maxes out at len1 + len2.
+    // In our optimized implementation, we use actual possible bigrams for approximation.
+    const total = len1 + len2
+    const score = total > 0 ? (2 * overlap) / total : 0
     if (score > bestScore && score > 0.4) {
       bestScore = score
       bestMatch = option
