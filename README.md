@@ -1,7 +1,7 @@
 <h1 align="center">better-workspace-mcp</h1>
 
 <p align="center">
-  <strong>Google Workspace MCP server — Docs/Drive/Calendar/Gmail/Sheets/Slides/Tasks/Chat/People/Forms + multi-account</strong>
+  <strong>Google Workspace MCP — Docs, Drive, Calendar, Gmail, Sheets, Slides, Tasks, Chat, People, Forms</strong>
 </p>
 
 <p align="center">
