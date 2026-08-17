@@ -18,6 +18,7 @@ as CONFLICT and leaves them alone; whoever syncs merges them by hand:
 - src/vendored/utils/MimeHelper.ts — the multipart boundary suffix could be empty
   (`.substring(7)` on a short `Math.random().toString(36)`, e.g. 0.5 -> "0.i"), so two messages
   built in the same millisecond collided on their boundary. Now a randomUUID-derived suffix.
+  Additionally, base64url encoding/decoding was changed to use native Node.js methods for performance.
 - src/vendored/services/SheetsService.ts — getText read N tabs in N `values.get` calls; now one
   `values.batchGet` with a per-range fallback that preserves partial success. Sheet names are
   also quote-escaped so a tab named `It's here` yields a parseable A1 range.
