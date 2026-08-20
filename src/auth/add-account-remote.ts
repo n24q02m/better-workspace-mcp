@@ -398,7 +398,7 @@ export async function handleAccountCallback(req: IncomingMessage, res: ServerRes
       res,
       400,
       'Link expired or not recognised',
-      'Start again with config(action="account_add") and open the fresh link. A link is only valid for a few minutes.'
+      'Start again with <code>config(action="account_add")</code> and open the fresh link. A link is only valid for a few minutes.'
     )
     return
   }
@@ -440,7 +440,7 @@ export async function handleAccountCallback(req: IncomingMessage, res: ServerRes
       res,
       400,
       'Link expired or not recognised',
-      'Start again with config(action="account_add") and open the fresh link. A link is only valid for a few minutes.'
+      'Start again with <code>config(action="account_add")</code> and open the fresh link. A link is only valid for a few minutes.'
     )
     return
   }
@@ -471,7 +471,13 @@ export async function handleAccountCallback(req: IncomingMessage, res: ServerRes
     // is the replay this just blocked. Google's own code is single-use anyway,
     // so the link was dead the moment it was submitted -- a fresh one is the
     // only correct recovery, and the message says so.
-    respond(res, 500, 'Could not add the account', `${message} Start again with config(action="account_add").`)
+    // Fail securely: hide detailed exceptions from the client to prevent sensitive data leakage.
+    respond(
+      res,
+      500,
+      'Could not add the account',
+      `An internal error occurred. Start again with <code>config(action="account_add")</code>.`
+    )
   }
 }
 

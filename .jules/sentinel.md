@@ -1,0 +1,4 @@
+## 2025-02-20 - Prevent Sensitive Information Leakage in OAuth Callback Error Responses
+**Vulnerability:** The OAuth consent callback handler in `src/auth/add-account-remote.ts` was returning raw exception messages directly to clients on 500 error responses (e.g. `err.message` within `${message}`). This could inadvertently leak sensitive internal backend details or stack traces to an attacker.
+**Learning:** Returning unhandled exception data or unstructured errors in HTTP responses constitutes an information leakage risk and violates secure failure practices.
+**Prevention:** Follow the "fail securely" principle by returning generic, safe error messages to clients (e.g., "An internal error occurred"), while retaining detailed error exceptions in internal logs (`console.error`) for debugging purposes.
