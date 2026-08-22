@@ -53,6 +53,9 @@ export interface Env {
   // The GOOGLE_OAUTH_**WEB**_* naming is deliberate -- see CONTAINER_ENV_SOURCES.
   GOOGLE_OAUTH_WEB_CLIENT_ID: string
   GOOGLE_OAUTH_WEB_CLIENT_SECRET: string
+  // Dehost / tombstone drill flag (W4)
+  DEHOSTED?: string
+  TOMBSTONE?: string
 }
 
 /**
@@ -203,8 +206,30 @@ function unauthenticated(request: Request): Response {
   })
 }
 
+function tombstoneResponse(): Response {
+  return new Response(
+    JSON.stringify({
+      error: 'hosted_runtime_dehosted',
+      status: 410,
+      message:
+        'The hosted Cloudflare endpoint for better-workspace-mcp has been retired. The package remains active via local stdio (npx @n24q02m/better-workspace-mcp / docker run -i n24q02m/better-workspace-mcp:beta) and self-hosted HTTP. See https://mcp.n24q02m.com/servers/better-workspace-mcp/ for instructions.',
+      successor: 'https://mcp.n24q02m.com/servers/better-workspace-mcp/'
+    }),
+    {
+      status: 410,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Dehosted-Successor': 'https://mcp.n24q02m.com/servers/better-workspace-mcp/'
+      }
+    }
+  )
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    if (env.DEHOSTED === 'true' || env.TOMBSTONE === 'true') {
+      return tombstoneResponse()
+    }
     // Public entrypoint: ONLY routes inbound requests to the container DO. The
     // kv.internal outbound handler is deliberately NOT dispatched here --
     // exposing it on the public fetch surface would let an external caller
