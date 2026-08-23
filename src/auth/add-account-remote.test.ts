@@ -473,4 +473,16 @@ describe('callback success path', () => {
     await handleAccountCallback(get(`/accounts/callback?code=b&state=${signState('s')}`), second as never)
     expect(second.status).toBe(200)
   })
+
+  it('sanitizes 500 response message and renders code block markup', async () => {
+    saveTokens.mockRejectedValueOnce(new Error('sensitive internal database connection failed: secret_12345'))
+    const res = fakeRes()
+    await handleAccountCallback(get(`/accounts/callback?code=a&state=${signState('s')}`), res as never)
+
+    expect(res.status).toBe(500)
+    expect(res.body).not.toContain('sensitive internal database connection failed')
+    expect(res.body).not.toContain('secret_12345')
+    expect(res.body).toContain('An internal error occurred.')
+    expect(res.body).toContain('<code>config(action=&quot;account_add&quot;)</code>')
+  })
 })
