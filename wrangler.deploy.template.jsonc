@@ -71,6 +71,7 @@
   // (CONTAINER_FIXED_ENV) because it is a property of the container runtime, not
   // a deployment choice an edit to this file should be able to drop.
   "vars": {
+    "DEHOSTED": "true",
     "MCP_TRANSPORT": "http",
     "PORT": "8080",
     // mcp-core binds 127.0.0.1 by default; without this the container "is not

@@ -492,3 +492,51 @@ describe('container cost + readiness config', () => {
     expect(c.enableInternet).toBe(true)
   })
 })
+
+describe('tombstone contract (W4 dehost preparation & drill)', () => {
+  it('returns 410 Gone with non-sensitive successor message and headers before edge auth when DEHOSTED is true', async () => {
+    const { calls, env } = envWithDoSpy()
+    const dehostedEnv = { ...env, DEHOSTED: 'true' }
+
+    const res = await worker.fetch(
+      new Request('https://workspace.n24q02m.com/mcp', {
+        method: 'POST'
+      }),
+      dehostedEnv as never
+    )
+
+    expect(res.status).toBe(410)
+    expect(res.headers.get('Content-Type')).toBe('application/json')
+    expect(res.headers.get('X-Dehosted-Successor')).toBe('https://mcp.n24q02m.com/servers/better-workspace-mcp/')
+
+    const body = await res.json()
+    expect(body).toMatchObject({
+      error: 'hosted_runtime_dehosted',
+      status: 410,
+      successor: 'https://mcp.n24q02m.com/servers/better-workspace-mcp/'
+    })
+    expect(body.message).toContain('retired')
+    expect(body.message).toContain('stdio')
+
+    // CRITICAL: 0 requests reach the Container DO
+    expect(calls).toEqual([])
+  })
+
+  it('returns 410 Gone on all routes before auth/DO for DEHOSTED and the existing TOMBSTONE drill alias', async () => {
+    const { calls, env } = envWithDoSpy()
+
+    for (const flag of ['DEHOSTED', 'TOMBSTONE'] as const) {
+      const flaggedEnv = { ...env, [flag]: 'true' }
+      for (const path of ['/authorize', '/health', '/.well-known/jwks.json', '/mcp/v1']) {
+        const res = await worker.fetch(
+          new Request(`https://workspace.n24q02m.com${path}`, { method: 'GET' }),
+          flaggedEnv as never
+        )
+        expect(res.status).toBe(410)
+        expect(res.headers.get('X-Dehosted-Successor')).toBe('https://mcp.n24q02m.com/servers/better-workspace-mcp/')
+      }
+    }
+
+    expect(calls).toEqual([])
+  })
+})

@@ -394,7 +394,7 @@ jobs:
     #     GOOGLE_OAUTH_WEB_CLIENT_ID, GOOGLE_OAUTH_WEB_CLIENT_SECRET. Missing ones
     #     do not fail `wrangler deploy`; they fail the canary.
     needs: [release]
-    if: needs.release.outputs.released == 'true'
+    if: needs.release.outputs.released == 'true' && vars.CF_HOSTED_ENABLED != 'false'
     runs-on: ubuntu-latest
     steps:
       - name: Harden Runner
