@@ -89,11 +89,8 @@ export class MimeHelper {
     const message = messageParts.join('\r\n');
 
     // Encode to base64url format required by Gmail API
-    const encodedMessage = Buffer.from(message)
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
+    // ⚡ Bolt: Use native base64url string encoding for better performance and less memory overhead
+    const encodedMessage = Buffer.from(message).toString('base64url');
 
     return encodedMessage;
   }
@@ -253,22 +250,15 @@ export class MimeHelper {
     const message = messageParts.join('\r\n');
 
     // Encode to base64url
-    return Buffer.from(message)
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
+    // ⚡ Bolt: Use native base64url string encoding for better performance and less memory overhead
+    return Buffer.from(message).toString('base64url');
   }
 
   /**
    * Decodes a base64url-encoded string (inverse of encoding)
    */
   public static decodeBase64Url(encoded: string): string {
-    // Add back padding if needed
-    let base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
-    while (base64.length % 4) {
-      base64 += '=';
-    }
-    return Buffer.from(base64, 'base64').toString('utf-8');
+    // ⚡ Bolt: Use native base64url decoding for better performance and less memory overhead
+    return Buffer.from(encoded, 'base64url').toString('utf-8');
   }
 }
