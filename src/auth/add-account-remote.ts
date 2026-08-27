@@ -471,7 +471,12 @@ export async function handleAccountCallback(req: IncomingMessage, res: ServerRes
     // is the replay this just blocked. Google's own code is single-use anyway,
     // so the link was dead the moment it was submitted -- a fresh one is the
     // only correct recovery, and the message says so.
-    respond(res, 500, 'Could not add the account', `${message} Start again with config(action="account_add").`)
+    respond(
+      res,
+      500,
+      'Could not add the account',
+      `An unexpected error occurred. Start again with config(action="account_add").`
+    )
   }
 }
 
