@@ -360,7 +360,7 @@ function escapeHtml(value: string): string {
 }
 
 const CALLBACK_CSS =
-  'body{font-family:system-ui,sans-serif;max-width:34rem;margin:4rem auto;padding:0 1rem;line-height:1.5;text-align:center}main{display:flex;flex-direction:column;align-items:center}.main-content{display:flex;flex-direction:column;align-items:center}.feedback-icon{width:3rem;height:3rem;margin-bottom:1rem}.feedback-icon--success{color:#10b981}.feedback-icon--error{color:#ef4444}h1{margin-top:0}code{background-color:rgba(150,150,150,0.2);padding:0.2rem 0.4rem;border-radius:0.25rem;font-family:monospace;word-break:break-all}'
+  'body{font-family:system-ui,sans-serif;max-width:34rem;margin:4rem auto;padding:0 1rem;line-height:1.5;text-align:center}main{display:flex;flex-direction:column;align-items:center}.main-content{display:flex;flex-direction:column;align-items:center}.feedback-icon{width:3rem;height:3rem;margin-bottom:1rem}.feedback-icon--success{color:#059669}.feedback-icon--error{color:#dc2626}h1{margin-top:0}code{background-color:rgba(150,150,150,0.2);padding:0.2rem 0.4rem;border-radius:0.25rem;font-family:monospace;word-break:break-all}'
 const CALLBACK_STYLE_HASH = createHash('sha256').update(CALLBACK_CSS).digest('base64')
 
 function respond(res: ServerResponse, status: number, title: string, detail: string): void {
