@@ -23,7 +23,7 @@
   "files": ["build/", "bin/", "README.md", "LICENSE", "NOTICE"],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "@n24q02m/mcp-core": "1.23.0",
+    "@n24q02m/mcp-core": "1.23.1",
     "googleapis": "^173.0.0",
     "google-auth-library": "^11.0.0",
     "zod": "^4.4.3"
