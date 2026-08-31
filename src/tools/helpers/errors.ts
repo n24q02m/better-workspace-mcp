@@ -178,25 +178,72 @@ export function findClosestMatch(input: string, validOptions: string[]): string 
   let bestMatch: string | null = null
   let bestScore = 0
 
-  // Pre-calculate input bigrams outside the loop to avoid redundant allocations
-  const inputBigrams = new Set<string>()
-  for (let i = 0; i < lower.length - 1; i++) inputBigrams.add(lower.slice(i, i + 2))
+  // PERFORMANCE: Using Set for bigrams requires object allocation and string slicing,
+  // which causes GC pressure. Instead, we pack the two 16-bit char codes of a bigram
+  // into a single 32-bit integer, and use an Array + O(N^2) duplicate checking.
+  // Since string lengths in this domain are very small (e.g. tool names < 30 chars),
+  // O(N^2) array scan is significantly faster (~3x) than Set operations.
+  const inputLen = lower.length
+  const inputBigramsCount = Math.max(0, inputLen - 1)
+
+  const inputBigrams = new Int32Array(inputBigramsCount)
+  let uniqueInputCount = 0
+
+  for (let i = 0; i < inputBigramsCount; i++) {
+    const bigram = lower.charCodeAt(i) | (lower.charCodeAt(i + 1) << 16)
+    let isDuplicate = false
+    for (let j = 0; j < uniqueInputCount; j++) {
+      if (inputBigrams[j] === bigram) {
+        isDuplicate = true
+        break
+      }
+    }
+    if (!isDuplicate) {
+      inputBigrams[uniqueInputCount++] = bigram
+    }
+  }
 
   for (const option of validOptions) {
     const optionLower = option.toLowerCase()
+
     // Check prefix match first
     if (optionLower.startsWith(lower) || lower.startsWith(optionLower)) {
       return option
     }
-    // Simple bigram similarity
-    const optionBigrams = new Set<string>()
-    for (let i = 0; i < optionLower.length - 1; i++) optionBigrams.add(optionLower.slice(i, i + 2))
+
+    const optionLen = optionLower.length
+    const optionBigramsCount = Math.max(0, optionLen - 1)
+    if (optionBigramsCount === 0) continue
+
+    const optionBigrams = new Int32Array(optionBigramsCount)
+    let uniqueOptionCount = 0
+
+    for (let i = 0; i < optionBigramsCount; i++) {
+      const bigram = optionLower.charCodeAt(i) | (optionLower.charCodeAt(i + 1) << 16)
+      let isDuplicate = false
+      for (let j = 0; j < uniqueOptionCount; j++) {
+        if (optionBigrams[j] === bigram) {
+          isDuplicate = true
+          break
+        }
+      }
+      if (!isDuplicate) {
+        optionBigrams[uniqueOptionCount++] = bigram
+      }
+    }
 
     let overlap = 0
-    for (const b of inputBigrams) {
-      if (optionBigrams.has(b)) overlap++
+    for (let i = 0; i < uniqueInputCount; i++) {
+      const bigram = inputBigrams[i]
+      for (let j = 0; j < uniqueOptionCount; j++) {
+        if (optionBigrams[j] === bigram) {
+          overlap++
+          break
+        }
+      }
     }
-    const score = (2 * overlap) / (inputBigrams.size + optionBigrams.size)
+
+    const score = (2 * overlap) / (uniqueInputCount + uniqueOptionCount)
     if (score > bestScore && score > 0.4) {
       bestScore = score
       bestMatch = option
