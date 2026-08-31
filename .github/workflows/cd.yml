@@ -370,6 +370,37 @@ jobs:
         run: ./mcp-publisher publish
 
   # ============================================================================
+  # Sync to Plugin Marketplace (stable only)
+  # ============================================================================
+  sync-marketplace:
+    name: Sync to Marketplace
+    needs: [release, publish-mcp-registry]
+    if: needs.release.outputs.released == 'true' && needs.release.outputs.is_prerelease != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ vars.CI_APP_ID }}
+          private-key: ${{ secrets.CI_APP_KEY }}
+          repositories: claude-plugins
+
+      - name: Dispatch plugin sync
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh api repos/n24q02m/claude-plugins/dispatches \
+            -f event_type=plugin-sync \
+            -f 'client_payload[repo]=better-workspace-mcp' \
+            -f 'client_payload[tag]=${{ needs.release.outputs.tag }}'
+
+  # ============================================================================
   # Deploy Cloudflare Worker+Container (build http image on runner + push + deploy)
   # ============================================================================
   deploy-cf:
