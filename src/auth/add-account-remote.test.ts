@@ -12,6 +12,7 @@ import {
   verifyState
 } from './add-account-remote.js'
 
+const originalFetch = globalThis.fetch
 const SECRET = 'test-secret-at-least-32-chars-long-xx'
 
 function setEnv(): void {
@@ -48,7 +49,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks()
-  vi.unstubAllGlobals()
+  globalThis.fetch = originalFetch
 })
 
 describe('state token', () => {
@@ -277,10 +278,9 @@ describe('callback success path', () => {
       return { saveTokens } as never
     })
     vi.spyOn(credentialState, 'resolveCredentialState').mockResolvedValue('configured')
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response(JSON.stringify({ access_token: 'at', id_token: 'x' }), { status: 200 }))
-    )
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ access_token: 'at', id_token: 'x' }), { status: 200 })
+    ) as never
   })
 
   it('stores the account inside the subject scope taken from the state', async () => {
@@ -318,10 +318,7 @@ describe('callback success path', () => {
   })
 
   it('reports a failed token exchange without storing anything', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response('invalid_grant', { status: 400 }))
-    )
+    globalThis.fetch = vi.fn(async () => new Response('invalid_grant', { status: 400 })) as never
     const res = fakeRes()
     await handleAccountCallback(get(`/accounts/callback?code=abc&state=${signState('s')}`), res as never)
     expect(res.status).toBe(500)
@@ -444,12 +441,9 @@ describe('callback success path', () => {
     process.env.MCP_STORAGE_BACKEND = 'cf-kv'
     process.env.MCP_KV_BASE_URL = 'http://kv.internal'
     resetNonceStoreForTesting()
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => {
-        throw new Error('kv unreachable')
-      })
-    )
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error('kv unreachable')
+    }) as never
     try {
       const res = fakeRes()
       await handleAccountCallback(get(`/accounts/callback?code=a&state=${signState('sub-1')}`), res as never)
