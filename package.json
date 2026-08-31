@@ -1,7 +1,7 @@
 {
   "name": "@n24q02m/better-workspace-mcp",
   "mcpName": "io.github.n24q02m/better-workspace-mcp",
-  "version": "0.3.1-beta.1",
+  "version": "0.3.1",
   "license": "Apache-2.0",
   "type": "module",
   "packageManager": "bun@1.2.21",
