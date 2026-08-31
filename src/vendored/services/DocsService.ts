@@ -764,7 +764,10 @@ export class DocsService {
           findText,
           replaceText,
         );
-        requests.push(...tabRequests);
+        // PERFORMANCE: Avoid spread operator on potentially large arrays to prevent "Maximum call stack size exceeded" errors
+        for (const request of tabRequests) {
+          requests.push(request);
+        }
       } else {
         for (const tab of tabs) {
           const currentTabId = tab.tabProperties?.tabId;
@@ -776,7 +779,10 @@ export class DocsService {
             findText,
             replaceText,
           );
-          requests.push(...tabRequests);
+          // PERFORMANCE: Avoid spread operator on potentially large arrays to prevent "Maximum call stack size exceeded" errors
+          for (const request of tabRequests) {
+            requests.push(request);
+          }
         }
       }
 
