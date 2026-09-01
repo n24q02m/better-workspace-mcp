@@ -360,7 +360,7 @@ function escapeHtml(value: string): string {
 }
 
 const CALLBACK_CSS =
-  'body{font-family:system-ui,sans-serif;max-width:34rem;margin:4rem auto;padding:0 1rem;line-height:1.5;text-align:center}main{display:flex;flex-direction:column;align-items:center}.main-content{display:flex;flex-direction:column;align-items:center}.feedback-icon{width:3rem;height:3rem;margin-bottom:1rem}.feedback-icon--success{color:#059669}.feedback-icon--error{color:#dc2626}h1{margin-top:0}code{background-color:rgba(150,150,150,0.2);padding:0.2rem 0.4rem;border-radius:0.25rem;font-family:monospace;word-break:break-all}'
+  'body{font-family:system-ui,sans-serif;max-width:34rem;margin:4rem auto;padding:0 1rem;line-height:1.5;text-align:center}main{display:flex;flex-direction:column;align-items:center}.main-content{display:flex;flex-direction:column;align-items:center}.feedback-icon{width:3rem;height:3rem;margin-bottom:1rem}.feedback-icon--success{color:#059669}.feedback-icon--error{color:#dc2626}h1{margin-top:0}code{background-color:rgba(150,150,150,0.2);padding:0.2rem 0.4rem;border-radius:0.25rem;font-family:monospace;word-break:break-all}kbd{background-color:rgba(150,150,150,0.2);padding:0.1rem 0.3rem;border-radius:0.25rem;font-family:monospace;font-size:0.85em;}'
 const CALLBACK_STYLE_HASH = createHash('sha256').update(CALLBACK_CSS).digest('base64')
 
 function respond(res: ServerResponse, status: number, title: string, detail: string): void {
@@ -371,10 +371,9 @@ function respond(res: ServerResponse, status: number, title: string, detail: str
       ? `<svg aria-label="Success" role="img" class="feedback-icon ${iconClass}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`
       : `<svg aria-label="Error" role="img" class="feedback-icon ${iconClass}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`
 
-  const escapedDetail = escapeHtml(detail).replace(
-    /config\(action=&quot;([^&]+)&quot;\)/g,
-    '<code>config(action=&quot;$1&quot;)</code>'
-  )
+  const escapedDetail = escapeHtml(detail)
+    .replace(/config\(action=&quot;([^&]+)&quot;\)/g, '<code>config(action=&quot;$1&quot;)</code>')
+    .replace(/&lt;kbd&gt;(.*?)&lt;\/kbd&gt;/g, '<kbd>$1</kbd>')
 
   const body = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>${escapeHtml(title)}</title><style>${CALLBACK_CSS}</style><body><main><div role="${role}" class="main-content">${icon}<h1>${escapeHtml(title)}</h1><p>${escapedDetail}</p></div></main></body></html>`
   res.writeHead(status, {
@@ -468,7 +467,7 @@ export async function handleAccountCallback(req: IncomingMessage, res: ServerRes
         return stored
       })
     )
-    respond(res, 200, 'Account added', `${email} is now connected. You can close this tab.`)
+    respond(res, 200, 'Account added', `${email} is now connected. You can close this tab (<kbd>Cmd/Ctrl + W</kbd>).`)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error(`[${SERVER_NAME}] add-account callback failed:`, message)
