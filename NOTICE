@@ -15,6 +15,7 @@ is unparseable or names a file that is not on disk -- an empty list would otherw
 These no longer match gemini-cli-extensions/workspace byte-for-byte. `sync-upstream.mjs` reports them
 as CONFLICT and leaves them alone; whoever syncs merges them by hand:
 
+- src/vendored/services/CalendarService.ts — optimization to use Date.parse() instead of new Date().getTime() to avoid intermediate object allocation.
 - src/vendored/utils/MimeHelper.ts — the multipart boundary suffix could be empty
   (`.substring(7)` on a short `Math.random().toString(36)`, e.g. 0.5 -> "0.i"), so two messages
   built in the same millisecond collided on their boundary. Now a randomUUID-derived suffix.

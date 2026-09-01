@@ -842,8 +842,9 @@ export class CalendarService {
               type: 'text' as const,
               text: JSON.stringify({
                 start: timeMin,
+                // Optimization: Use Date.parse() instead of new Date().getTime() to avoid intermediate object allocation
                 end: new Date(
-                  new Date(timeMin).getTime() + duration * 60000,
+                  Date.parse(timeMin) + duration * 60000,
                 ).toISOString(),
               }),
             },
@@ -855,8 +856,9 @@ export class CalendarService {
       const sortedBusyTimes = busyTimes
         .filter((busy) => busy.start && busy.end)
         .map((busy) => ({
-          start: new Date(busy.start!).getTime(),
-          end: new Date(busy.end!).getTime(),
+          // Optimization: Use Date.parse() to avoid intermediate Date object allocations inside the loop
+          start: Date.parse(busy.start!),
+          end: Date.parse(busy.end!),
         }))
         .sort((a, b) => a.start - b.start);
 
@@ -875,8 +877,9 @@ export class CalendarService {
         }
       }
 
-      const startTime = new Date(timeMin).getTime();
-      const endTime = new Date(timeMax).getTime();
+      // Optimization: Use Date.parse() to avoid intermediate object allocation
+      const startTime = Date.parse(timeMin);
+      const endTime = Date.parse(timeMax);
       const durationMs = duration * 60000;
 
       // If no busy times, return the start of the range
