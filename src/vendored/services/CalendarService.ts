@@ -854,9 +854,10 @@ export class CalendarService {
       // Sort and merge overlapping busy intervals for better performance
       const sortedBusyTimes = busyTimes
         .filter((busy) => busy.start && busy.end)
+        // PERFORMANCE: Using Date.parse() instead of new Date().getTime() skips object allocation and reduces GC pressure
         .map((busy) => ({
-          start: new Date(busy.start!).getTime(),
-          end: new Date(busy.end!).getTime(),
+          start: Date.parse(busy.start!),
+          end: Date.parse(busy.end!),
         }))
         .sort((a, b) => a.start - b.start);
 
