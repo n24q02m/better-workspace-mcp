@@ -35,9 +35,9 @@ type CompleteEventValidationInput = {
 const isoDateSchema = z.string().refine(
   (val) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(val)) return false;
-    const parsed = new Date(`${val}T00:00:00Z`);
-    if (Number.isNaN(parsed.getTime())) return false;
-    return parsed.toISOString().slice(0, 10) === val;
+    const timestamp = Date.parse(`${val}T00:00:00Z`);
+    if (Number.isNaN(timestamp)) return false;
+    return new Date(timestamp).toISOString().slice(0, 10) === val;
   },
   {
     message: 'Invalid date format. Expected YYYY-MM-DD',
