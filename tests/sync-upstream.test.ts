@@ -23,8 +23,10 @@ describe('parseNotice', () => {
 
     expect([...lists.forked].sort()).toEqual([
       'src/vendored/services/CalendarService.ts',
+      'src/vendored/services/CalendarValidation.ts',
       'src/vendored/services/SheetsService.ts',
-      'src/vendored/utils/MimeHelper.ts'
+      'src/vendored/utils/MimeHelper.ts',
+      'src/vendored/utils/validation.ts'
     ])
     expect([...lists.replaced].sort()).toEqual([
       'src/vendored/auth/AuthManager.ts',
@@ -47,6 +49,8 @@ describe('parseNotice', () => {
     const emptied = NOTICE.replace(/^- src\/vendored\/utils\/MimeHelper\.ts.*?(?=^- |^## )/ms, '')
       .replace(/^- src\/vendored\/services\/SheetsService\.ts.*?(?=^- |^## )/ms, '')
       .replace(/^- src\/vendored\/services\/CalendarService\.ts.*?(?=^## )/ms, '')
+      .replace(/^- src\/vendored\/services\/CalendarService\.ts.*?(?=^- |^## )/ms, '')
+      .replace(/^- src\/vendored\/utils\/validation\.ts.*?(?=^## )/ms, '')
     expect(() => parseNotice(emptied)).toThrow(/lists no files/)
   })
 
