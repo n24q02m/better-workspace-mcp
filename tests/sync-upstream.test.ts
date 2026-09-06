@@ -22,6 +22,7 @@ describe('parseNotice', () => {
     const lists = parseNotice(NOTICE)
 
     expect([...lists.forked].sort()).toEqual([
+      'src/vendored/services/CalendarService.ts',
       'src/vendored/services/SheetsService.ts',
       'src/vendored/utils/MimeHelper.ts'
     ])
