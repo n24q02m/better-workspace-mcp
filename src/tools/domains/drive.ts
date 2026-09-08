@@ -11,4 +11,4 @@ export const DRIVE_ACTIONS = [
   'moveFile',
   'downloadFile'
 ] as const
-export const drive = makeDomainRun(DriveService, DRIVE_ACTIONS)
+export const drive = makeDomainRun(DriveService, DRIVE_ACTIONS, { pagination: { search: 'pageSize' } })

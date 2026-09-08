@@ -20,6 +20,33 @@ type ServiceCtor = new (auth: AuthManager) => object
 type ServiceCtorNoAuth = new () => object
 type ServiceMethod = (params: unknown) => Promise<CallToolResult>
 
+export const DEFAULT_PAGE_SIZE = 20
+export const MAX_PAGE_SIZE = 100
+
+export function normalizePageSize(value: unknown, field: 'pageSize' | 'maxResults'): number {
+  if (value === undefined) return DEFAULT_PAGE_SIZE
+  if (typeof value !== 'number' || !Number.isFinite(value) || !Number.isInteger(value)) {
+    throw new WorkspaceMCPError(
+      `${field} must be an integer`,
+      'VALIDATION_ERROR',
+      `Use an integer from 1 to ${MAX_PAGE_SIZE}`
+    )
+  }
+  return Math.min(Math.max(value, 1), MAX_PAGE_SIZE)
+}
+
+function normalizeBoundedParams(
+  action: string,
+  params: Record<string, unknown>,
+  pagination: Record<string, 'pageSize' | 'maxResults'> | undefined
+): Record<string, unknown> {
+  const normalized = { ...params }
+  const field = pagination?.[action]
+  if (!field) return normalized
+  normalized[field] = normalizePageSize(normalized[field], field)
+  return normalized
+}
+
 export interface DomainRunInput {
   action: string
   account?: string
@@ -29,15 +56,19 @@ export interface DomainRunInput {
 export function makeDomainRun(
   ServiceClass: ServiceCtor | ServiceCtorNoAuth,
   actions: readonly string[],
-  opts: { noAuth?: boolean } = {}
-) {
+  opts: {
+    noAuth?: boolean
+    pagination?: Record<string, 'pageSize' | 'maxResults'>
+  } = {}
+): (input: DomainRunInput) => Promise<CallToolResult> {
   const svc = opts.noAuth
     ? new (ServiceClass as ServiceCtorNoAuth)()
     : new (ServiceClass as ServiceCtor)(new AuthManager(BASE_SCOPES))
 
   return function run(input: DomainRunInput): Promise<CallToolResult> {
     return withErrorHandling(async () => {
-      const { action, account, ...params } = input
+      const { action, account, ...rawParams } = input
+      const params = normalizeBoundedParams(action, rawParams, opts.pagination)
       if (!actions.includes(action)) {
         throw new WorkspaceMCPError(
           `Unknown action: ${action}`,

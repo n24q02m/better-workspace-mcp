@@ -11,4 +11,4 @@ import { makeDomainRun } from './factory.js'
 // Action name = FormsService method name (verbatim).
 export const FORMS_ACTIONS = ['create', 'get', 'batchUpdate', 'listResponses', 'getResponse'] as const
 
-export const forms = makeDomainRun(FormsService, FORMS_ACTIONS)
+export const forms = makeDomainRun(FormsService, FORMS_ACTIONS, { pagination: { listResponses: 'pageSize' } })

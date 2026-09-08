@@ -11,4 +11,6 @@ export const CHAT_ACTIONS = [
   'listThreads',
   'setUpSpace'
 ] as const
-export const chat = makeDomainRun(ChatService, CHAT_ACTIONS)
+export const chat = makeDomainRun(ChatService, CHAT_ACTIONS, {
+  pagination: { listSpaces: 'pageSize', getMessages: 'pageSize', listThreads: 'pageSize' }
+})

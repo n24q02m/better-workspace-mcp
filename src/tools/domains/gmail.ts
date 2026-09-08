@@ -14,4 +14,4 @@ export const GMAIL_ACTIONS = [
   'listLabels',
   'createLabel'
 ] as const
-export const gmail = makeDomainRun(GmailService, GMAIL_ACTIONS)
+export const gmail = makeDomainRun(GmailService, GMAIL_ACTIONS, { pagination: { search: 'maxResults' } })
