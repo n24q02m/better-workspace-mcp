@@ -14,7 +14,7 @@ primary.
 
 | Action | Required params | Optional params | Description |
 | --- | --- | --- | --- |
-| `getText` | `documentId` | `tabId` | Read the document's text. Returns plain text for a single-tab document, or JSON with all tabs when the doc has more than one tab. |
+| `getText` | `documentId` | `tabId`, `limit`, `preview` | Read the document's text. Returns plain text for a single-tab document, or JSON with all tabs when the doc has more than one tab. Output defaults to 20,000 characters; `preview` uses 2,000 unless `limit` is supplied. `limit` accepts 1–100,000, and truncated output includes an explicit marker. |
 | `create` | `title` | `content` | Create a new Google Doc, optionally seeded with initial text content. |
 | `writeText` | `documentId`, `text` | `position` (default `"end"`), `tabId` | Insert text at `"beginning"`, `"end"`, or a positive integer character index. |
 | `getSuggestions` | `documentId` | -- | List pending suggested edits (insertions, deletions, style and paragraph-style changes). |
@@ -30,7 +30,7 @@ Every action returns the MCP `CallTool` result shape directly from
 ## Examples
 
 ```json
-{ "action": "getText", "documentId": "1AbCdEf..." }
+{ "action": "getText", "documentId": "1AbCdEf...", "preview": true }
 { "action": "writeText", "documentId": "1AbCdEf...", "text": "Hello", "position": "end" }
 { "action": "formatText", "documentId": "1AbCdEf...", "formats": [{ "startIndex": 1, "endIndex": 6, "style": "bold" }] }
 ```

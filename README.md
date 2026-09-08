@@ -57,6 +57,7 @@
 - [Quick start](#quick-start)
 - [Multi-account](#multi-account)
 - [Documentation](#documentation)
+- [Handover](docs/HANDOVER.md)
 - [Contributing](#contributing)
 - [License](#license)
 

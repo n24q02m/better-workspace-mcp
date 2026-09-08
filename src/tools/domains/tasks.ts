@@ -9,4 +9,6 @@ export const TASKS_ACTIONS = [
   'completeTask',
   'deleteTask'
 ] as const
-export const tasks = makeDomainRun(TasksService, TASKS_ACTIONS)
+export const tasks = makeDomainRun(TasksService, TASKS_ACTIONS, {
+  pagination: { listTaskLists: 'maxResults', listTasks: 'maxResults' }
+})

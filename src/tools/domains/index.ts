@@ -34,7 +34,7 @@ export const DOMAINS: DomainDef[] = [
   {
     name: 'docs',
     description:
-      'Google Docs operations.\n\nActions (required params -> optional):\n- getText (documentId -> tabId)\n- create (title -> content)\n- writeText (documentId, text -> position, tabId)\n- getSuggestions (documentId)\n- replaceText (documentId, findText, replaceText -> tabId)\n- formatText (documentId, formats -> tabId)\n\naccount = email of the Google account to use (default: primary).',
+      'Google Docs operations.\n\nActions (required params -> optional):\n- getText (documentId -> tabId, limit, preview)\n- create (title -> content)\n- writeText (documentId, text -> position, tabId)\n- getSuggestions (documentId)\n- replaceText (documentId, findText, replaceText -> tabId)\n- formatText (documentId, formats -> tabId)\n\ngetText defaults to 20,000 characters, accepts limit 1-100,000, and marks truncated output explicitly. preview defaults to 2,000 characters unless limit is provided. These bounds limit response size without changing document authorization.\n\naccount = email of the Google account to use (default: primary).',
     actions: DOCS_ACTIONS,
     inputProps: {
       documentId: { type: 'string', description: 'Google Doc ID or URL' },
@@ -46,7 +46,8 @@ export const DOMAINS: DomainDef[] = [
         description: 'Insert position for writeText: "beginning", "end" (default), or a positive integer index'
       },
       tabId: { type: 'string', description: 'Tab ID to target (optional, for multi-tab documents)' },
-      findText: { type: 'string', description: 'Text to find (for replaceText)' },
+      limit: { type: 'number', description: 'Maximum Docs text characters for getText (1-100000; default 20000)' },
+      preview: { type: 'boolean', description: 'Use a 2000-character getText preview unless limit is provided' },
       replaceText: { type: 'string', description: 'Replacement text (for replaceText)' },
       formats: {
         type: 'array',
@@ -89,6 +90,10 @@ export const DOMAINS: DomainDef[] = [
       newName: { type: 'string' },
       parentId: { type: 'string' },
       destinationFolderId: { type: 'string' },
+      pageSize: { type: 'number', description: 'Maximum search results per page (default 10)' },
+      pageToken: { type: 'string', description: 'Continuation token from a previous search page' },
+      corpus: { type: 'string', enum: ['user', 'domain'], description: 'Drive search corpus' },
+      unreadOnly: { type: 'boolean', description: 'Restrict search to unread files where supported' },
       localPath: {
         type: 'string',
         description:
@@ -127,7 +132,12 @@ export const DOMAINS: DomainDef[] = [
       displayName: { type: 'string' },
       email: { type: 'string' },
       text: { type: 'string' },
-      threadId: { type: 'string' }
+      threadId: { type: 'string' },
+      pageSize: { type: 'number', description: 'Maximum spaces, messages, or threads per page' },
+      pageToken: { type: 'string', description: 'Continuation token from a previous page' },
+      unreadOnly: { type: 'boolean', description: 'Return only unread messages' },
+      orderBy: { type: 'string', description: 'Message ordering expression' },
+      filter: { type: 'string', description: 'Chat message filter' }
     },
     run: chat
   },
@@ -146,7 +156,11 @@ export const DOMAINS: DomainDef[] = [
       subject: { type: 'string' },
       body: { type: 'string' },
       draftId: { type: 'string' },
-      labelIds: { type: 'array' }
+      labelIds: { type: 'array' },
+      maxResults: { type: 'number', description: 'Maximum messages returned per page (bounded by Gmail)' },
+      pageToken: { type: 'string', description: 'Continuation token from a previous search page' },
+      includeSpamTrash: { type: 'boolean', description: 'Include spam and trash in search results' },
+      format: { type: 'string', enum: ['minimal', 'full', 'raw', 'metadata'], description: 'Message payload detail' }
     },
     run: gmail
   },
@@ -190,7 +204,9 @@ export const DOMAINS: DomainDef[] = [
       taskId: { type: 'string' },
       title: { type: 'string' },
       notes: { type: 'string' },
-      due: { type: 'string' }
+      due: { type: 'string' },
+      maxResults: { type: 'number', description: 'Maximum task lists or tasks per page' },
+      pageToken: { type: 'string', description: 'Continuation token from a previous page' }
     },
     run: tasks
   },
