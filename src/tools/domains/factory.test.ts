@@ -43,6 +43,10 @@ describe('pagination contracts', () => {
     const writeResult = await run({ action: 'write', pageSize: 500 })
     expect(JSON.parse(textOf(writeResult))).toEqual({ pageSize: 500 })
   })
+  it('rejects unknown actions before validating pagination fields', async () => {
+    const run = makeDomainRun(CaptureService, ['list'], { pagination: { list: 'pageSize' } })
+    await expect(run({ action: 'missing', pageSize: 1.5 })).rejects.toThrow(/Unknown action: missing/)
+  })
 
   it('returns a validation error for invalid list input', async () => {
     const run = makeDomainRun(CaptureService, ['list'], { pagination: { list: 'pageSize' } })

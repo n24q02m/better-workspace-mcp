@@ -68,7 +68,6 @@ export function makeDomainRun(
   return function run(input: DomainRunInput): Promise<CallToolResult> {
     return withErrorHandling(async () => {
       const { action, account, ...rawParams } = input
-      const params = normalizeBoundedParams(action, rawParams, opts.pagination)
       if (!actions.includes(action)) {
         throw new WorkspaceMCPError(
           `Unknown action: ${action}`,
@@ -76,6 +75,7 @@ export function makeDomainRun(
           `Valid actions: ${actions.join(', ')}`
         )
       }
+      const params = normalizeBoundedParams(action, rawParams, opts.pagination)
       const method = (svc as unknown as Record<string, ServiceMethod>)[action]
       // The vendored service is a singleton built at module load, and upstream's
       // getAuthenticatedClient() takes no arguments, so the account cannot ride
