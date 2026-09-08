@@ -114,6 +114,33 @@ describe('registerTools', () => {
         'formatText'
       ])
     })
+    it('advertises bounded pagination and payload controls for list/read operations', async () => {
+      const handler = getHandler(server, 'tools/list')
+      const result = await handler({ method: 'tools/list' })
+      const tools = result.tools as Array<{
+        name: string
+        inputSchema: { properties: Record<string, unknown> }
+      }>
+      const byName: Record<string, (typeof tools)[number]> = Object.fromEntries(tools.map((tool) => [tool.name, tool]))
+
+      expect(byName.drive.inputSchema.properties).toMatchObject({
+        pageSize: { type: 'number' },
+        pageToken: { type: 'string' }
+      })
+      expect(byName.gmail.inputSchema.properties).toMatchObject({
+        maxResults: { type: 'number' },
+        pageToken: { type: 'string' },
+        format: { enum: ['minimal', 'full', 'raw', 'metadata'] }
+      })
+      expect(byName.chat.inputSchema.properties).toMatchObject({
+        pageSize: { type: 'number' },
+        pageToken: { type: 'string' }
+      })
+      expect(byName.tasks.inputSchema.properties).toMatchObject({
+        maxResults: { type: 'number' },
+        pageToken: { type: 'string' }
+      })
+    })
 
     it('does not advertise Drive filesystem writes to remote clients', async () => {
       const remoteServer = createServer()

@@ -89,6 +89,10 @@ export const DOMAINS: DomainDef[] = [
       newName: { type: 'string' },
       parentId: { type: 'string' },
       destinationFolderId: { type: 'string' },
+      pageSize: { type: 'number', description: 'Maximum search results per page (default 10)' },
+      pageToken: { type: 'string', description: 'Continuation token from a previous search page' },
+      corpus: { type: 'string', enum: ['user', 'domain'], description: 'Drive search corpus' },
+      unreadOnly: { type: 'boolean', description: 'Restrict search to unread files where supported' },
       localPath: {
         type: 'string',
         description:
@@ -127,7 +131,12 @@ export const DOMAINS: DomainDef[] = [
       displayName: { type: 'string' },
       email: { type: 'string' },
       text: { type: 'string' },
-      threadId: { type: 'string' }
+      threadId: { type: 'string' },
+      pageSize: { type: 'number', description: 'Maximum spaces, messages, or threads per page' },
+      pageToken: { type: 'string', description: 'Continuation token from a previous page' },
+      unreadOnly: { type: 'boolean', description: 'Return only unread messages' },
+      orderBy: { type: 'string', description: 'Message ordering expression' },
+      filter: { type: 'string', description: 'Chat message filter' }
     },
     run: chat
   },
@@ -146,7 +155,11 @@ export const DOMAINS: DomainDef[] = [
       subject: { type: 'string' },
       body: { type: 'string' },
       draftId: { type: 'string' },
-      labelIds: { type: 'array' }
+      labelIds: { type: 'array' },
+      maxResults: { type: 'number', description: 'Maximum messages returned per page (bounded by Gmail)' },
+      pageToken: { type: 'string', description: 'Continuation token from a previous search page' },
+      includeSpamTrash: { type: 'boolean', description: 'Include spam and trash in search results' },
+      format: { type: 'string', enum: ['minimal', 'full', 'raw', 'metadata'], description: 'Message payload detail' }
     },
     run: gmail
   },
@@ -190,7 +203,9 @@ export const DOMAINS: DomainDef[] = [
       taskId: { type: 'string' },
       title: { type: 'string' },
       notes: { type: 'string' },
-      due: { type: 'string' }
+      due: { type: 'string' },
+      maxResults: { type: 'number', description: 'Maximum task lists or tasks per page' },
+      pageToken: { type: 'string', description: 'Continuation token from a previous page' }
     },
     run: tasks
   },
