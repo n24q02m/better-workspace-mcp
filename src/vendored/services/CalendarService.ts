@@ -842,8 +842,9 @@ export class CalendarService {
               type: 'text' as const,
               text: JSON.stringify({
                 start: timeMin,
+                // PERFORMANCE: Using Date.parse() instead of new Date().getTime() skips object allocation and reduces GC pressure
                 end: new Date(
-                  new Date(timeMin).getTime() + duration * 60000,
+                  Date.parse(timeMin) + duration * 60000,
                 ).toISOString(),
               }),
             },
@@ -876,8 +877,9 @@ export class CalendarService {
         }
       }
 
-      const startTime = new Date(timeMin).getTime();
-      const endTime = new Date(timeMax).getTime();
+      // PERFORMANCE: Using Date.parse() instead of new Date().getTime() skips object allocation and reduces GC pressure
+      const startTime = Date.parse(timeMin);
+      const endTime = Date.parse(timeMax);
       const durationMs = duration * 60000;
 
       // If no busy times, return the start of the range
