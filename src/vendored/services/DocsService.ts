@@ -17,6 +17,27 @@ import { extractDocumentId as validateAndExtractDocId } from '../utils/validatio
 export const TABS_FIELD_MASK =
   'tabs(tabProperties,documentTab(body,headers,footers,footnotes))';
 
+export const DEFAULT_DOCS_TEXT_LIMIT = 20_000;
+export const PREVIEW_DOCS_TEXT_LIMIT = 2_000;
+export const MAX_DOCS_TEXT_LIMIT = 100_000;
+
+export interface BoundedDocsText {
+  text: string;
+  truncated: boolean;
+  totalCharacters: number;
+}
+
+export function boundDocsText(text: string, limit: number): BoundedDocsText {
+  const totalCharacters = text.length;
+  if (totalCharacters <= limit) return { text, truncated: false, totalCharacters };
+
+  return {
+    text: `${text.slice(0, limit)}\n\n[Content truncated: ${totalCharacters - limit} characters omitted. Request a larger limit to continue, up to ${MAX_DOCS_TEXT_LIMIT}.]`,
+    truncated: true,
+    totalCharacters
+  };
+}
+
 interface BaseDocsSuggestion {
   text: string;
   startIndex?: number;
@@ -514,7 +535,7 @@ export class DocsService {
         content: [
           {
             type: 'text' as const,
-            text: `Successfully applied ${requests.length} formatting change(s) to document ${id}`,
+            text: `Successfully applied ${requests.length} format(s) to document ${id}`,
           },
         ],
       };
@@ -536,15 +557,29 @@ export class DocsService {
   public getText = async ({
     documentId,
     tabId,
+    limit,
+    preview = false,
   }: {
     documentId: string;
     tabId?: string;
+    limit?: number;
+    preview?: boolean;
   }) => {
     logToFile(
       `[DocsService] Starting getText for document: ${documentId}, tabId: ${tabId}`,
     );
     try {
-      // Validate and extract document ID
+      const textLimit = limit ?? (preview ? PREVIEW_DOCS_TEXT_LIMIT : DEFAULT_DOCS_TEXT_LIMIT);
+      if (
+        !Number.isInteger(textLimit) ||
+        textLimit < 1 ||
+        textLimit > MAX_DOCS_TEXT_LIMIT
+      ) {
+        throw new Error(
+          `limit must be an integer from 1 to ${MAX_DOCS_TEXT_LIMIT}.`,
+        );
+      }
+
       const id = validateAndExtractDocId(documentId);
       const docs = await this.getDocsClient();
       const res = await docs.documents.get({
@@ -557,90 +592,49 @@ export class DocsService {
       const docTitle = res.data.title;
       const tabs = this._flattenTabs(res.data.tabs || []);
 
-      // If tabId is provided, try to find it
       if (tabId) {
         const tab = tabs.find((t) => t.tabProperties?.tabId === tabId);
-        if (!tab) {
-          throw new Error(`Tab with ID ${tabId} not found.`);
-        }
+        if (!tab) throw new Error(`Tab with ID ${tabId} not found.`);
 
         const content = tab.documentTab?.body?.content;
-        if (!content) {
-          return {
-            content: [
-              {
-                type: 'text' as const,
-                text: '',
-              },
-            ],
-          };
-        }
+        if (!content) return { content: [{ type: 'text' as const, text: '' }] };
 
-        let text = '';
-        if (docTitle) {
-          text += `Document Title: ${docTitle}\n\n`;
-        }
+        let text = docTitle ? `Document Title: ${docTitle}\n\n` : '';
         content.forEach((element) => {
           text += this._readStructuralElement(element);
         });
 
         return {
-          content: [
-            {
-              type: 'text' as const,
-              text: text,
-            },
-          ],
+          content: [{ type: 'text' as const, text: boundDocsText(text, textLimit).text }],
         };
       }
 
-      // If no tabId provided
-      if (tabs.length === 0) {
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: '',
-            },
-          ],
-        };
-      }
+      if (tabs.length === 0) return { content: [{ type: 'text' as const, text: '' }] };
 
-      // If only 1 tab, return plain text (backward compatibility)
       if (tabs.length === 1) {
         const tab = tabs[0];
-        let text = '';
-        if (docTitle) {
-          text += `Document Title: ${docTitle}\n\n`;
-        }
-        if (tab.documentTab?.body?.content) {
-          tab.documentTab.body.content.forEach((element) => {
-            text += this._readStructuralElement(element);
-          });
-        }
+        let text = docTitle ? `Document Title: ${docTitle}\n\n` : '';
+        tab.documentTab?.body?.content?.forEach((element) => {
+          text += this._readStructuralElement(element);
+        });
         return {
-          content: [
-            {
-              type: 'text' as const,
-              text: text,
-            },
-          ],
+          content: [{ type: 'text' as const, text: boundDocsText(text, textLimit).text }],
         };
       }
 
-      // If multiple tabs, return JSON
       const tabsData = tabs.map((tab, index) => {
         let tabText = '';
-        if (tab.documentTab?.body?.content) {
-          tab.documentTab.body.content.forEach((element) => {
-            tabText += this._readStructuralElement(element);
-          });
-        }
+        tab.documentTab?.body?.content?.forEach((element) => {
+          tabText += this._readStructuralElement(element);
+        });
+        const bounded = boundDocsText(tabText, textLimit);
         return {
           tabId: tab.tabProperties?.tabId,
           title: tab.tabProperties?.title,
-          content: tabText,
-          index: index,
+          content: bounded.text,
+          truncated: bounded.truncated,
+          totalCharacters: bounded.totalCharacters,
+          index,
         };
       });
 

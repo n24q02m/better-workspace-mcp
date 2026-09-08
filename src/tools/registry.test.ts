@@ -140,6 +140,10 @@ describe('registerTools', () => {
         maxResults: { type: 'number' },
         pageToken: { type: 'string' }
       })
+      expect(byName.docs.inputSchema.properties).toMatchObject({
+        limit: { type: 'number' },
+        preview: { type: 'boolean' }
+      })
     })
 
     it('does not advertise Drive filesystem writes to remote clients', async () => {

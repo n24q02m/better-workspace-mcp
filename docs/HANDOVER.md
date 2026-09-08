@@ -15,7 +15,7 @@ The MCP registry exposes one composite tool per domain plus `config` and `help`:
 
 | Tool | Operations | Output/pagination controls |
 |---|---|---|
-| `docs` | getText, create, writeText, getSuggestions, replaceText, formatText | Document reads preserve full text; no output clamp is currently applied. Writes return bounded status/IDs. |
+| `docs` | getText, create, writeText, getSuggestions, replaceText, formatText | `getText` defaults to 20,000 characters; `preview` uses 2,000 unless `limit` is supplied; `limit` accepts 1–100,000 and marks truncation explicitly. Writes return bounded status/IDs. |
 | `drive` | findFolder, createFolder, search, trashFile, renameFile, getComments, moveFile, downloadFile | `search` uses `pageSize` and `pageToken`; downloads write to an explicitly selected local path. |
 | `calendar` | listCalendars, createEvent, listEvents, getEvent, deleteEvent, updateEvent, respondToEvent, findFreeTime | Event listing uses time windows and page tokens where supported; free-time uses explicit time range and duration. |
 | `gmail` | search, get, downloadAttachment, modify, batchModify, modifyThread, send, createDraft, sendDraft, listLabels, createLabel | Search defaults to a bounded `maxResults`; `pageToken` continues reads; message `format` selects payload size. |
@@ -63,7 +63,7 @@ Rollback is forward-only through a reviewed source change and a new release. Do 
 
 1. Keep domain operations in the existing service/domain modules; adapters must not call each other or create a second credential store.
 2. Preserve `src/tools/domains/index.ts` as the registry source of truth. Add a domain by extending its `DomainDef`, action list, input properties, and matching documentation.
-3. Pagination controls for Drive, Gmail, Chat, Tasks, and Forms use a default of 20 and clamp caller values to 1–100; explicit continuation tokens remain available. A general Docs `limit`/`preview` output contract is still pending.
+3. Pagination controls for Drive, Gmail, Chat, Tasks, and Forms use a default of 20 and clamp caller values to 1–100; explicit continuation tokens remain available. Docs `getText` uses an explicit 20,000-character default, 2,000-character preview, and 1–100,000 `limit` bound with truncation markers.
 4. Keep vendored service files aligned with upstream unless a local fork is recorded in `NOTICE` and covered by the sync test.
 5. Treat package name, repository identity, MCP server ID, OAuth identity, data path, and endpoint as independent migration surfaces. No rename is implied by this handover.
 
