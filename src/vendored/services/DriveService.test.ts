@@ -61,7 +61,7 @@ describe('DriveService downloadFile local filesystem contract', () => {
     expect(result.content[0].text).toContain(expectedPath)
   })
 
-  it('keeps an explicit absolute destination unchanged in local stdio mode', async () => {
+  it('keeps an explicit absolute destination unchanged if inside PROJECT_ROOT', async () => {
     const localPath = path.join(PROJECT_ROOT, 'downloads', 'report.pdf')
 
     await download(localPath)
@@ -69,14 +69,26 @@ describe('DriveService downloadFile local filesystem contract', () => {
     expect(writeFile).toHaveBeenCalledWith(localPath, expect.any(Buffer))
   })
 
-  it('resolves local relative traversal with the existing local caller contract', async () => {
+  it('rejects absolute paths outside PROJECT_ROOT', async () => {
+    const localPath = '/etc/passwd'
+
+    const result = await download(localPath)
+    expect(result.content[0].text).toContain('localPath must be within the project root')
+  })
+
+  it('rejects local relative traversal that escapes PROJECT_ROOT', async () => {
     const localPath = '../../outside-report.pdf'
-    const expectedPath = path.resolve(PROJECT_ROOT, localPath)
 
-    await download(localPath)
+    const result = await download(localPath)
+    expect(result.content[0].text).toContain('localPath must be within the project root')
+  })
 
-    expect(path.relative(PROJECT_ROOT, expectedPath).startsWith('..')).toBe(true)
-    expect(writeFile).toHaveBeenCalledWith(expectedPath, expect.any(Buffer))
+  it('rejects sibling directory bypass attempts', async () => {
+    // e.g. if PROJECT_ROOT is /app/my-project, this attempts to write to /app/my-project-sibling
+    const localPath = '../' + path.basename(PROJECT_ROOT) + '-sibling/report.pdf'
+
+    const result = await download(localPath)
+    expect(result.content[0].text).toContain('localPath must be within the project root')
   })
 
   it('does not decode encoded traversal segments in the local caller contract', async () => {
