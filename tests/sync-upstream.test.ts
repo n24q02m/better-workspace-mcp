@@ -22,6 +22,7 @@ describe('parseNotice', () => {
     const lists = parseNotice(NOTICE)
 
     expect([...lists.forked].sort()).toEqual([
+      'src/vendored/services/CalendarService.ts',
       'src/vendored/services/SheetsService.ts',
       'src/vendored/utils/MimeHelper.ts'
     ])
@@ -43,10 +44,9 @@ describe('parseNotice', () => {
   })
 
   it('refuses a section that parses to an empty list', () => {
-    const emptied = NOTICE.replace(/^- src\/vendored\/utils\/MimeHelper\.ts.*?(?=^- |^## )/ms, '').replace(
-      /^- src\/vendored\/services\/SheetsService\.ts.*?(?=^## )/ms,
-      ''
-    )
+    const emptied = NOTICE.replace(/^- src\/vendored\/utils\/MimeHelper\.ts.*?(?=^- |^## )/ms, '')
+      .replace(/^- src\/vendored\/services\/SheetsService\.ts.*?(?=^- |^## )/ms, '')
+      .replace(/^- src\/vendored\/services\/CalendarService\.ts.*?(?=^## )/ms, '')
     expect(() => parseNotice(emptied)).toThrow(/lists no files/)
   })
 
