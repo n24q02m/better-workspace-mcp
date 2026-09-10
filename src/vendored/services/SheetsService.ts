@@ -150,29 +150,35 @@ export class SheetsService {
             content += '(Empty sheet)\n';
           } else {
             // Process each row
-            values.forEach((row) => {
-              if (format === 'csv') {
-                // Convert to CSV format
-                const csvRow = row
-                  .map((cell) => {
-                    // Escape quotes and wrap in quotes if contains comma or quotes
-                    const cellStr = String(cell || '');
-                    if (
-                      cellStr.includes(',') ||
-                      cellStr.includes('"') ||
-                      cellStr.includes('\n')
-                    ) {
-                      return `"${cellStr.replace(/"/g, '""')}"`;
-                    }
-                    return cellStr;
-                  })
-                  .join(',');
-                content += csvRow + '\n';
-              } else {
-                // Plain text format with pipe separators for readability
-                content += row.map((cell) => cell || '').join(' | ') + '\n';
+            // PERFORMANCE: Replace values.forEach/row.map/join with traditional loops
+            // to prevent high memory allocations and GC pressure on large sheets
+            if (format === 'csv') {
+              for (let i = 0; i < values.length; i++) {
+                const row = values[i];
+                for (let j = 0; j < row.length; j++) {
+                  if (j > 0) content += ',';
+                  let cellStr = String(row[j] || '');
+                  if (
+                    cellStr.includes(',') ||
+                    cellStr.includes('"') ||
+                    cellStr.includes('\n')
+                  ) {
+                    cellStr = `"${cellStr.replace(/"/g, '""')}"`;
+                  }
+                  content += cellStr;
+                }
+                content += '\n';
               }
-            });
+            } else {
+              for (let i = 0; i < values.length; i++) {
+                const row = values[i];
+                for (let j = 0; j < row.length; j++) {
+                  if (j > 0) content += ' | ';
+                  content += row[j] || '';
+                }
+                content += '\n';
+              }
+            }
           }
           content += '\n';
         }
