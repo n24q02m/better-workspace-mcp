@@ -413,7 +413,8 @@ export async function handleAccountCallback(req: IncomingMessage, res: ServerRes
   // consent error apart from a rejected link.
   const error = query.get('error')
   if (error) {
-    respond(res, 400, 'Google did not grant access', `Google returned "${error}". No account was added.`)
+    const safeError = error.length > 100 ? error.substring(0, 100) + '...' : error
+    respond(res, 400, 'Google did not grant access', `Google returned "${safeError}". No account was added.`)
     return
   }
 
