@@ -63,8 +63,7 @@ export const iso8601DateTimeSchema = z.string().refine(
     if (!iso8601Regex.test(val)) return false;
 
     // Additional check: ensure it's a valid date
-    const date = new Date(val);
-    return !isNaN(date.getTime());
+    return !isNaN(Date.parse(val));
   },
   {
     message:
