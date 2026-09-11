@@ -621,6 +621,11 @@ export class DriveService {
       const absolutePath = path.isAbsolute(localPath)
         ? localPath
         : path.resolve(PROJECT_ROOT, localPath);
+
+      if (!absolutePath.startsWith(PROJECT_ROOT + path.sep) && absolutePath !== PROJECT_ROOT) {
+        throw new Error('localPath must be within the project root.');
+      }
+
       const dir = path.dirname(absolutePath);
 
       await fs.promises.mkdir(dir, { recursive: true });

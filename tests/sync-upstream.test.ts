@@ -24,6 +24,7 @@ describe('parseNotice', () => {
     expect([...lists.forked].sort()).toEqual([
       'src/vendored/services/CalendarService.ts',
       'src/vendored/services/CalendarValidation.ts',
+      'src/vendored/services/DriveService.ts',
       'src/vendored/services/SheetsService.ts',
       'src/vendored/utils/MimeHelper.ts',
       'src/vendored/utils/validation.ts'
@@ -48,6 +49,7 @@ describe('parseNotice', () => {
   it('refuses a section that parses to an empty list', () => {
     const emptied = NOTICE.replace(/^- src\/vendored\/utils\/MimeHelper\.ts.*?(?=^- |^## )/ms, '')
       .replace(/^- src\/vendored\/services\/SheetsService\.ts.*?(?=^- |^## )/ms, '')
+      .replace(/^- src\/vendored\/services\/DriveService\.ts.*?(?=^- |^## )/ms, '')
       .replace(/^- src\/vendored\/services\/CalendarService\.ts.*?(?=^## )/ms, '')
       .replace(/^- src\/vendored\/services\/CalendarService\.ts.*?(?=^- |^## )/ms, '')
       .replace(/^- src\/vendored\/utils\/validation\.ts.*?(?=^## )/ms, '')
