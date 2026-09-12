@@ -414,13 +414,23 @@ export async function handleAccountCallback(req: IncomingMessage, res: ServerRes
   const error = query.get('error')
   if (error) {
     const safeError = error.length > 100 ? error.substring(0, 100) + '...' : error
-    respond(res, 400, 'Google did not grant access', `Google returned "${safeError}". No account was added. Start again with config(action="account_add").`)
+    respond(
+      res,
+      400,
+      'Google did not grant access',
+      `Google returned "${safeError}". No account was added. Start again with config(action="account_add").`
+    )
     return
   }
 
   const code = query.get('code')
   if (!code) {
-    respond(res, 400, 'Incomplete consent', 'Google did not return an authorization code. No account was added. Start again with config(action="account_add").')
+    respond(
+      res,
+      400,
+      'Incomplete consent',
+      'Google did not return an authorization code. No account was added. Start again with config(action="account_add").'
+    )
     return
   }
 
