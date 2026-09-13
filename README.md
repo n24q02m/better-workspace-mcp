@@ -4,6 +4,8 @@
   <strong>Google Workspace MCP — Docs, Drive, Calendar, Gmail, Sheets, Slides, Tasks, Chat, People, Forms</strong>
 </p>
 
+> **ARCHIVED 2026-09-13** — This repository is no longer maintained. Use the official Google Workspace APIs instead of this MCP server. Existing installations keep working but receive no updates or support.
+
 <p align="center">
   <a href="https://mcp.n24q02m.com/get-started/modes-overview/"><img alt="Mode: stdio · http remote oauth" src="https://img.shields.io/badge/mode-stdio_%C2%B7_http--remote--oauth-5C6BC0"></a>
   <a href="https://github.com/n24q02m/better-workspace-mcp/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/n24q02m/better-workspace-mcp/actions/workflows/ci.yml/badge.svg"></a>
