@@ -1,3 +1,5 @@
+> **ARCHIVED 2026-09-13** — This repository is no longer maintained. Use the official Google Workspace APIs instead of this MCP server. Existing installations keep working but receive no updates or support.
+
 <h1 align="center">better-workspace-mcp</h1>
 
 <p align="center">
