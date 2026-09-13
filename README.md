@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://mcp.n24q02m.com/get-started/modes-overview/"><img alt="Mode: stdio · http remote oauth" src="https://img.shields.io/badge/mode-stdio_%C2%B7_http--remote--oauth-blue"></a>
+  <a href="https://mcp.n24q02m.com/get-started/modes-overview/"><img alt="Mode: stdio · http remote oauth" src="https://img.shields.io/badge/mode-stdio_%C2%B7_http--remote--oauth-5C6BC0"></a>
   <a href="https://github.com/n24q02m/better-workspace-mcp/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/n24q02m/better-workspace-mcp/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/n24q02m/better-workspace-mcp/actions/workflows/cd.yml"><img alt="CD" src="https://github.com/n24q02m/better-workspace-mcp/actions/workflows/cd.yml/badge.svg"></a>
   <a href="https://codecov.io/gh/n24q02m/better-workspace-mcp"><img alt="codecov" src="https://codecov.io/gh/n24q02m/better-workspace-mcp/graph/badge.svg"></a>
