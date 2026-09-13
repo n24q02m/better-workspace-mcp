@@ -5,6 +5,7 @@
 </p>
 
 <p align="center">
+  <a href="https://mcp.n24q02m.com/get-started/modes-overview/"><img alt="Mode: stdio · http remote oauth" src="https://img.shields.io/badge/mode-stdio_%C2%B7_http--remote--oauth-blue"></a>
   <a href="https://github.com/n24q02m/better-workspace-mcp/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/n24q02m/better-workspace-mcp/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/n24q02m/better-workspace-mcp/actions/workflows/cd.yml"><img alt="CD" src="https://github.com/n24q02m/better-workspace-mcp/actions/workflows/cd.yml/badge.svg"></a>
   <a href="https://codecov.io/gh/n24q02m/better-workspace-mcp"><img alt="codecov" src="https://codecov.io/gh/n24q02m/better-workspace-mcp/graph/badge.svg"></a>
@@ -57,6 +58,7 @@
 - [Quick start](#quick-start)
 - [Multi-account](#multi-account)
 - [Documentation](#documentation)
+- [Deployment](#deployment)
 - [Handover](docs/HANDOVER.md)
 - [Contributing](#contributing)
 - [License](#license)
@@ -95,6 +97,11 @@ is stored encrypted on your machine, so later runs start without asking again.
 
 The same server can also serve several people over HTTP -- see
 [Remote (HTTP mode)](#remote-http-mode).
+
+**Install with an AI agent** -- paste this to your AI coding agent:
+
+> Install MCP server `better-workspace-mcp` following the steps at
+> https://raw.githubusercontent.com/n24q02m/claude-plugins/main/plugins/better-workspace-mcp/setup-with-agent.md
 
 ## Remote (HTTP mode)
 
@@ -304,15 +311,37 @@ replaced in place, so nothing else changes.
 
 ## Documentation
 
-Docs for the whole MCP server stack are at
-**[mcp.n24q02m.com](https://mcp.n24q02m.com)**. A page dedicated to this server is
-not published yet; until it is, the two references that apply here are:
+Full docs at **[mcp.n24q02m.com/servers/better-workspace-mcp/](https://mcp.n24q02m.com/servers/better-workspace-mcp/)**:
 
+- [Setup](https://mcp.n24q02m.com/servers/better-workspace-mcp/setup/) -- plugin install, Docker stdio, and Docker HTTP methods
 - [Modes overview](https://mcp.n24q02m.com/get-started/modes-overview/) -- stdio (default) and HTTP (multi-user, OAuth 2.1)
 - [Multi-user setup](https://mcp.n24q02m.com/get-started/multi-user/) -- the per-JWT-`sub` credential model behind [Remote (HTTP mode)](#remote-http-mode)
 
 Every tool also documents itself at runtime: call `help` for the full reference on
 any of them, including the exact parameters each action takes.
+
+## Deployment
+
+The Cloudflare deployment is CD-managed: publishing a release triggers the
+`deploy-cf` job in [`.github/workflows/cd.yml`](.github/workflows/cd.yml),
+which checks out the released tag, builds the `http` container image tagged
+with the released version, pushes it to Cloudflare's managed registry, deploys
+the Worker + Container stack, and gates on a canary -- a failed canary fails
+the job rather than landing a bad deploy, so the live image always corresponds
+to a released, immutable image tag. Deploying by hand from a laptop breaks
+that property and is not the supported path.
+
+The job cannot create its own prerequisites: the `workspace.n24q02m.com`
+custom domain must be attached to the worker (the deploy template carries no
+routes block), and `CREDENTIAL_SECRET`, `MCP_RELAY_PASSWORD`,
+`GOOGLE_OAUTH_WEB_CLIENT_ID`, and `GOOGLE_OAUTH_WEB_CLIENT_SECRET` must be set
+as worker secrets -- missing ones surface as canary failures, not as deploy
+failures.
+
+The job is currently gated off: the repository Actions variable
+`CF_HOSTED_ENABLED` is set to `false`, so releases do not auto-deploy and no
+hosted endpoint is operated. The supported paths are the stdio install above
+and a self-hosted HTTP deployment of your own.
 
 ## Contributing
 
