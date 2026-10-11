@@ -58,9 +58,14 @@
     "vitest": "^4.1.9"
   },
   "main": "build/src/init-server.js",
+  "description": "Google Workspace MCP — Docs, Drive, Calendar, Gmail, Sheets, Slides, Tasks, Chat, People, Forms",
   "repository": {
     "type": "git",
     "url": "https://github.com/n24q02m/workspace.git"
   },
+  "bugs": {
+    "url": "https://github.com/n24q02m/workspace/issues"
+  },
+  "homepage": "https://github.com/n24q02m/workspace#readme",
   "author": "n24q02m"
 }
