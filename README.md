@@ -1,4 +1,4 @@
-<h1 align="center">better-workspace-mcp</h1>
+<h1 align="center">workspace</h1>
 
 <p align="center">
   <strong>Google Workspace MCP — Docs, Drive, Calendar, Gmail, Sheets, Slides, Tasks, Chat, People, Forms</strong>
@@ -8,19 +8,19 @@
 
 <p align="center">
   <a href="https://mcp.n24q02m.com/get-started/modes-overview/"><img alt="Mode: stdio · http remote oauth" src="https://img.shields.io/badge/mode-stdio_%C2%B7_http--remote--oauth-5C6BC0"></a>
-  <a href="https://github.com/n24q02m/better-workspace-mcp/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/n24q02m/better-workspace-mcp/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://github.com/n24q02m/better-workspace-mcp/actions/workflows/cd.yml"><img alt="CD" src="https://github.com/n24q02m/better-workspace-mcp/actions/workflows/cd.yml/badge.svg"></a>
-  <a href="https://codecov.io/gh/n24q02m/better-workspace-mcp"><img alt="codecov" src="https://codecov.io/gh/n24q02m/better-workspace-mcp/graph/badge.svg"></a>
-  <a href="https://github.com/n24q02m/better-workspace-mcp/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/n24q02m/better-workspace-mcp?display_name=tag&sort=semver"></a>
+  <a href="https://github.com/n24q02m/workspace/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/n24q02m/workspace/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/n24q02m/workspace/actions/workflows/cd.yml"><img alt="CD" src="https://github.com/n24q02m/workspace/actions/workflows/cd.yml/badge.svg"></a>
+  <a href="https://codecov.io/gh/n24q02m/workspace"><img alt="codecov" src="https://codecov.io/gh/n24q02m/workspace/graph/badge.svg"></a>
+  <a href="https://github.com/n24q02m/workspace/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/n24q02m/workspace?display_name=tag&sort=semver"></a>
   <a href="https://github.com/python-semantic-release/python-semantic-release"><img alt="semantic-release" src="https://img.shields.io/badge/semantic--release-e10079?logo=semantic-release&logoColor=white"></a>
-  <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/github/license/n24q02m/better-workspace-mcp"></a>
+  <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/github/license/n24q02m/workspace"></a>
 </p>
 
 <p align="center">
   <a href="https://mcp.n24q02m.com">Docs</a> ·
   <a href="#install">Install</a> ·
   <a href="#quick-start">Quick start</a> ·
-  <a href="https://github.com/n24q02m/better-workspace-mcp/discussions">Community</a>
+  <a href="https://github.com/n24q02m/workspace/discussions">Community</a>
 </p>
 
 <!-- BEGIN: AUTO-GENERATED-CROSS-PROMO -->
@@ -74,9 +74,9 @@ stdio, add it to your MCP client config:
 ```jsonc
 {
   "mcpServers": {
-    "better-workspace": {
+    "workspace": {
       "command": "npx",
-      "args": ["--yes", "@n24q02m/better-workspace-mcp@latest"],
+      "args": ["--yes", "@n24q02m/workspace@latest"],
       "env": {
         "GOOGLE_OAUTH_CLIENT_ID": "<your-client-id>.apps.googleusercontent.com",
         "GOOGLE_OAUTH_CLIENT_SECRET": "<your-client-secret>"
@@ -85,6 +85,11 @@ stdio, add it to your MCP client config:
   }
 }
 ```
+
+The package is `@n24q02m/workspace` (formerly `@n24q02m/better-workspace-mcp`;
+old package receives one final release then freezes). The MCP Registry id stays
+`io.github.n24q02m/better-workspace-mcp`, and the legacy `better-workspace-mcp`
+command is kept as an alias of `workspace`.
 
 Those two values come from an OAuth 2.0 client of type **Desktop app**, created in
 the [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
@@ -102,7 +107,7 @@ The same server can also serve several people over HTTP -- see
 
 **Install with an AI agent** -- paste this to your AI coding agent:
 
-> Install MCP server `better-workspace-mcp` following the steps at
+> Install MCP server `workspace` following the steps at
 > https://raw.githubusercontent.com/n24q02m/claude-plugins/main/plugins/better-workspace-mcp/setup-with-agent.md
 
 ## Remote (HTTP mode)
@@ -117,7 +122,7 @@ Point your MCP client at the host you deployed it on:
 ```jsonc
 {
   "mcpServers": {
-    "better-workspace": {
+    "workspace": {
       "type": "http",
       "url": "https://<your-host>/mcp"
     }

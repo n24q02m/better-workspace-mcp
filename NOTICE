@@ -1,4 +1,4 @@
-better-workspace-mcp
+workspace (https://github.com/n24q02m/workspace)
 Copyright 2026 n24q02m
 
 This product includes software developed by Google LLC and contributors
@@ -37,7 +37,8 @@ its upstream namesake does not produce a merge conflict, it produces a build tha
 back in -- so `sync-upstream.mjs` never copies over them and never reports them:
 
 - src/vendored/utils/paths.ts — this server's own config/cache locations, not gemini-cli's.
-- src/vendored/utils/logger.ts — logs to stderr, since stdout is the MCP transport.
+- src/vendored/utils/logger.ts — logs to stderr, since stdout is the MCP transport. Line prefix
+  is `[workspace]`, renamed together with the repo (drift: ours, not an upstream change).
 - src/vendored/auth/AuthManager.ts — reads `currentAccount()` and delegates to `WorkspaceAuth`,
   where upstream reads gemini-cli's credential files.
 

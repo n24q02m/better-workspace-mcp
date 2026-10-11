@@ -121,6 +121,10 @@ describe('M1 stdio protocol E2E', () => {
   // fail with an arithmetic complaint ("expected 12, got 13") that says nothing
   // about what broke. The assertion that carries weight is the name comparison
   // below -- it fails with the actual missing or unexpected tool name.
+  it('identifies itself as `workspace` in the initialize handshake', () => {
+    expect(client.getServerVersion()?.name).toBe('workspace')
+  })
+
   it(`lists exactly the ${EXPECTED_TOOL_NAMES.length} N+2 tools (${DOMAINS.length} domains + config + help)`, async () => {
     const result = await client.listTools()
 

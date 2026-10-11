@@ -2,7 +2,7 @@
 
 ## Quick reference
 
-- Repo: `n24q02m/better-workspace-mcp`
+- Repo: `n24q02m/workspace`
 - Description: Google Workspace MCP server — Docs/Drive/Calendar/Gmail/Sheets/Slides/Tasks/Chat/People + multi-account
 - License: Apache-2.0
 

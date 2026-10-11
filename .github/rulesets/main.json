@@ -2,7 +2,7 @@
   "name": "Main Branch Rules",
   "target": "branch",
   "source_type": "Repository",
-  "source": "n24q02m/better-workspace-mcp",
+  "source": "n24q02m/workspace",
   "enforcement": "active",
   "bypass_actors": [
     {

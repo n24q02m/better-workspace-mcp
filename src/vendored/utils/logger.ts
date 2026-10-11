@@ -12,5 +12,5 @@ export function logToFile(message: string): void {
   if (!isLoggingEnabled) {
     return
   }
-  process.stderr.write(`[better-workspace-mcp] ${message}\n`)
+  process.stderr.write(`[workspace] ${message}\n`)
 }
