@@ -160,9 +160,9 @@ Register both of these on the Web client, or the flows that use them fail with
 
 Keep the two client credentials under separate names. Pointing
 `GOOGLE_OAUTH_CLIENT_ID`/`_SECRET` at the Web client on a machine that also runs
-stdio breaks every stdio install, which is why the Cloudflare deploy carries the
+stdio breaks every stdio install, which is why `docker-compose.http.yml` reads the
 Web pair as `GOOGLE_OAUTH_WEB_CLIENT_ID`/`_SECRET` and renames it on the way into
-the container (`src/worker.ts`).
+the container.
 
 ### Environment
 
@@ -175,7 +175,8 @@ the container (`src/worker.ts`).
 | `MCP_RELAY_PASSWORD` | recommended | One shared password gating `/authorize` behind a login page. Empty disables the gate, which leaves anyone who can reach the host able to start an OAuth flow against your deployment. |
 | `PORT` | no | Listen port. `0` (the default) asks the OS for a free one. |
 | `HOST` | no | Bind address. Defaults to loopback, so a container needs `0.0.0.0`. |
-| `MCP_STORAGE_BACKEND` / `MCP_KV_BASE_URL` | Cloudflare only | Set to `cf-kv` and the worker's internal KV URL when running as a Cloudflare Worker + Container. Left unset, credentials are stored on local disk. |
+
+Credentials are stored on local disk, under the data volume.
 
 `docker-compose.http.yml` in this repo is these variables written out as a
 runnable overlay.
@@ -329,26 +330,25 @@ any of them, including the exact parameters each action takes.
 
 ## Deployment
 
-The Cloudflare deployment is CD-managed: publishing a release triggers the
-`deploy-cf` job in [`.github/workflows/cd.yml`](.github/workflows/cd.yml),
-which checks out the released tag, builds the `http` container image tagged
-with the released version, pushes it to Cloudflare's managed registry, deploys
-the Worker + Container stack, and gates on a canary -- a failed canary fails
-the job rather than landing a bad deploy, so the live image always corresponds
-to a released, immutable image tag. Deploying by hand from a laptop breaks
-that property and is not the supported path.
+No hosted endpoint is operated for this server. The supported paths are the
+stdio install above and a self-hosted HTTP deployment of your own.
 
-The job cannot create its own prerequisites: the `workspace.n24q02m.com`
-custom domain must be attached to the worker (the deploy template carries no
-routes block), and `CREDENTIAL_SECRET`, `MCP_RELAY_PASSWORD`,
-`GOOGLE_OAUTH_WEB_CLIENT_ID`, and `GOOGLE_OAUTH_WEB_CLIENT_SECRET` must be set
-as worker secrets -- missing ones surface as canary failures, not as deploy
-failures.
+To self-host HTTP mode, run the compose overlay from this repository:
 
-The job is currently gated off: the repository Actions variable
-`CF_HOSTED_ENABLED` is set to `false`, so releases do not auto-deploy and no
-hosted endpoint is operated. The supported paths are the stdio install above
-and a self-hosted HTTP deployment of your own.
+```sh
+docker compose -f docker-compose.yml -f docker-compose.http.yml up
+```
+
+It builds the `http` image locally and publishes it on host loopback only, at
+`http://localhost:8087`. Supply `GOOGLE_OAUTH_WEB_CLIENT_ID`,
+`GOOGLE_OAUTH_WEB_CLIENT_SECRET`, `CREDENTIAL_SECRET`, `PUBLIC_URL`, and
+`MCP_RELAY_PASSWORD` through your shell or an `.env` file (see
+[Environment](#environment)). For use beyond the local machine, put your own
+TLS reverse proxy on the same host in front of it and set `PUBLIC_URL` to that
+proxy's origin.
+
+Each release also publishes multi-arch container images to Docker Hub and
+GHCR; their default stage is the `http` server.
 
 ## Contributing
 

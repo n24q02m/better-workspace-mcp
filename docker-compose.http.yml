@@ -6,10 +6,9 @@ services:
       target: http
     environment:
       - MCP_TRANSPORT=http
-      # The WEB OAuth client, renamed on the way in - exactly what
-      # src/worker.ts:CONTAINER_ENV_SOURCES does for the Cloudflare deploy, and
-      # for the same reason: Google binds redirect URIs to the client TYPE, so
-      # http needs a Web client while stdio needs a Desktop one. Keeping the two
+      # The WEB OAuth client, renamed on the way in: Google binds redirect URIs
+      # to the client TYPE, so http needs a Web client while stdio needs a
+      # Desktop one. Keeping the two
       # under distinct names is what stops an http deploy from overwriting the
       # credentials every stdio install runs on.
       #
@@ -37,5 +36,7 @@ services:
       - PORT=8080
     # Next free port in the stack (notion+telegram 8081, email 8082, imagine 8084,
     # wet 8085, mnemo 8086). The assignments are a convention, not a registry.
+    # Published on host loopback only: reach it as http://localhost:8087, or put
+    # your own TLS reverse proxy on the same host in front of it.
     ports:
-      - "8087:8080"
+      - "127.0.0.1:8087:8080"

@@ -10,10 +10,13 @@
   "commitMessageTopic": "{{depName}}",
   "semanticCommitType": "fix",
   "semanticCommitScope": "deps",
-  "golang": {
-    "postUpdateOptions": ["gomodTidy"]
-  },
   "packageRules": [
+    {
+      "description": "Run go mod tidy after every Go module update",
+      "matchCategories": ["golang"],
+      "postUpdateOptions": ["gomodTidy"],
+      "minimumReleaseAge": "7 days"
+    },
     {
       "description": "Pin GitHub Actions to SHA for security",
       "matchManagers": ["github-actions"],
