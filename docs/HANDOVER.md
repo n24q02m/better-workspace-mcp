@@ -40,7 +40,7 @@ bun run test
 bun run build
 ```
 
-`bun run type-check` checks both the server TypeScript project and the Cloudflare worker project. `bun run build` produces `build/` and `bin/cli.mjs`. CI is the authoritative source for hosted checks; local commands are source evidence only.
+`bun run type-check` checks the server TypeScript project. `bun run build` produces `build/` and `bin/cli.mjs`. CI is the authoritative source for hosted checks; local commands are source evidence only.
 
 For local stdio operation, provide `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` for a Desktop OAuth client. For HTTP operation, provide the Web client pair, `CREDENTIAL_SECRET`, and an exact `PUBLIC_URL`; set `HOST=0.0.0.0` in a container. `MCP_RELAY_PASSWORD` protects the hosted authorization entry point when configured. Never commit these values.
 

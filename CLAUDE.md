@@ -39,9 +39,10 @@ DUNG HAI mode, chon o `main.ts:getTransportMode` — `stdio` (mac dinh) va `http
 | `GOOGLE_OAUTH_CLIENT_ID` / `_SECRET` | co | Web client. `startHttp` nem neu thieu (`transports/http.ts:100-105`). |
 | `CREDENTIAL_SECRET` | co | Khoa AES cua bucket per-sub + khoa ky JWT cua mcp-core. Thieu no thi mcp-core ghi khoa RS256 ra FS container EPHEMERAL → identity vo moi lan recreate; nen chan ngay o startup thay vi no giua luong consent. |
 | `PUBLIC_URL` | tren deploy that | Origin cong khai chinh xac; redirect URI derive tu day. Bo trong thi mcp-core lay `Host` header → issuer `http://` + redirect khong khop URI da dang ky → Google 400 `redirect_uri_mismatch`. `buildAddAccountUrl` nem thang neu thieu. |
-| `MCP_RELAY_PASSWORD` | nen co | Gate A: chan `/authorize` sau `/login`. Rong = TAT gate (mcp-core coi empty la disable) → ai cham duoc host cung mo duoc OAuth flow. `worker.ts` PHAI forward key nay, thieu = relay self-service mo ra Internet. |
+| `MCP_RELAY_PASSWORD` | nen co | Gate A: chan `/authorize` sau `/login`. Rong = TAT gate (mcp-core coi empty la disable) → ai cham duoc host cung mo duoc OAuth flow. Moi deploy publish ra ngoai loopback PHAI set key nay, thieu = relay self-service mo ra Internet. |
 | `PORT` / `HOST` | khong | `PORT` mac dinh `0` (OS cap). `HOST` mac dinh loopback cua mcp-core → container PHAI `0.0.0.0`. |
-| `MCP_STORAGE_BACKEND` / `MCP_KV_BASE_URL` | chi CF | `cf-kv` + `http://kv.internal`. Khong set = luu tren dia container. |
+
+Credential luu tren dia container (volume). Nhanh `cf-kv` trong `src/auth/add-account-remote.ts:nonceKv` (doc `MCP_STORAGE_BACKEND`) chi deploy hosted cu set, nay la ung vien dead code.
 
 ### Hai OAuth client, khong phai mot
 
@@ -50,7 +51,7 @@ Google rang buoc redirect URI theo **loai client**: Desktop redirect duoc toi lo
 - `<PUBLIC_URL>/callback` — dang nhap vao chinh server (delegated OAuth, `callbackPath` mac dinh cua mcp-core).
 - `<PUBLIC_URL>/accounts/callback` — `config(action="account_add")`.
 
-Ghi de `GOOGLE_OAUTH_CLIENT_ID/_SECRET` bang gia tri Web se lam dut moi ban stdio dang chay. Vi the skret `/better-workspace-mcp/prod` giu HAI cap ten khac nhau (`GOOGLE_OAUTH_*` = Desktop, `GOOGLE_OAUTH_WEB_*` = Web), va `worker.ts:CONTAINER_ENV_SOURCES` doi ten `_WEB_` → ten tran khi bom vao container — server khong biet gi ve Cloudflare.
+Ghi de `GOOGLE_OAUTH_CLIENT_ID/_SECRET` bang gia tri Web se lam dut moi ban stdio dang chay. Vi the skret `/better-workspace-mcp/prod` giu HAI cap ten khac nhau (`GOOGLE_OAUTH_*` = Desktop, `GOOGLE_OAUTH_WEB_*` = Web), va `docker-compose.http.yml` doi ten `GOOGLE_OAUTH_WEB_*` → ten tran khi bom vao container — server chi doc `GOOGLE_OAUTH_CLIENT_ID/_SECRET`.
 
 ## Multi-account
 
@@ -80,8 +81,8 @@ bun run build       # tsc -build + scripts/build-cli.js -> bin/cli.mjs
 ## Cau hinh
 
 - License: Apache-2.0 (repo nay vendor code Apache-2.0 tu upstream; ca stack deu Apache-2.0).
-- Compose: `docker-compose.yml` (base, target `stdio`) + `docker-compose.http.yml` (overlay, target `http`). Build tu Dockerfile local voi `target:` chu KHONG pull theo tag — CD build KHONG truyen `target` nen moi tag da publish deu la stage CUOI cua Dockerfile (= `http`), khong co tag `:stdio`. Volume tro vao `/home/node/.better-workspace-mcp` (dung cho PerPluginStore ghi), KHONG phai `/data` nhu notion/email (o do volume /data khong che duong ghi nao). **KHONG co `docker-compose.cloudflare.yml`**: overlay do o notion/wet tro `MCP_KV_BASE_URL` vao `wrangler dev` public fetch, nhung `worker.ts` (ca 3 repo) CO Y khong dispatch `kv.internal` tren public fetch — de lo la ai cung doc/ghi duoc KV credential. Port o overlay = 8087 (notion+telegram 8081, email 8082, imagine 8084, wet 8085, mnemo 8086).
-- `type-check` chay CA HAI pass: `tsc --noEmit` (server, types node) va `tsc --noEmit -p tsconfig.worker.json` (`src/worker.ts`, types `@cloudflare/workers-types`). `tsconfig.json` `exclude` worker.ts khoi pass dau. Luu y: `exclude` KHONG chan mot file bi check khi file trong `include` import no — nen test cua worker phai nam o `tests/worker.test.ts`, KHONG phai `src/worker.test.ts` (dat trong `src/` se keo worker.ts nguoc vao pass node-typed va fail o `cloudflare:workers`).
+- Compose: `docker-compose.yml` (base, target `stdio`) + `docker-compose.http.yml` (overlay, target `http`). Build tu Dockerfile local voi `target:` chu KHONG pull theo tag — CD build KHONG truyen `target` nen moi tag da publish deu la stage CUOI cua Dockerfile (= `http`), khong co tag `:stdio`. Volume tro vao `/home/node/.better-workspace-mcp` (dung cho PerPluginStore ghi), KHONG phai `/data` nhu notion/email (o do volume /data khong che duong ghi nao). Port o overlay = 8087 (notion+telegram 8081, email 8082, imagine 8084, wet 8085, mnemo 8086), publish CHI tren loopback host (`127.0.0.1:8087`); muon dung ngoai may thi dat TLS reverse proxy cua minh tren cung host. Repo KHONG van hanh hosted endpoint nao: duong ho tro = stdio + self-host http qua overlay nay.
+- `type-check` = `tsc --noEmit` (mot pass, types node).
 - Test surface: 378 test / 25 file = unit + component + 2 hermetic protocol E2E (`tests/protocol/m1-stdio.test.ts`, `tests/protocol/m2-multi-account.test.ts` — stdio_client spawn bin/cli.mjs, seeded token, no real network). Real-Google smoke = thu cong (manual, ngoai CI — can OAuth client + consent). Smoke 2 account cua M2 DA CHAY 2026-07-25, 6/6 buoc PASS: M1 flat blob -> v2 adopt offline giu nguyen `refresh_token`; account thu 2 them qua `account_add`; `getMe` tra 2 danh tinh khac nhau; `drive.search` tra data khac nhau theo account; account la truyen vao bi tu choi DUNG TEN (khong am tham fallback ve primary); force-expire refresh chi cap nhat account B, token account A byte-identical. Chi tiet + cach tai hien: `.private/superpower/better-workspace-mcp/m2-task9-live-smoke-2026-07-25.md`.
 
 ## Dependency dac biet

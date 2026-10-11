@@ -52,11 +52,6 @@ __pycache__/
 # Agent artifacts (not committed)
 .jules/
 .code-review-graph/
-.wrangler/
-
-# Deploy-time wrangler config with REAL account/KV IDs + custom domain.
-# wrangler.jsonc keeps placeholders; this is generated from it at deploy time.
-wrangler.deploy.jsonc
 
 # AI Assistant / Rules
 .jules/
