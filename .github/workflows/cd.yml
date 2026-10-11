@@ -462,4 +462,3 @@ jobs:
             -f event_type=plugin-sync \
             -f 'client_payload[repo]=workspace' \
             -f 'client_payload[tag]=${{ needs.release.outputs.tag }}'
-
