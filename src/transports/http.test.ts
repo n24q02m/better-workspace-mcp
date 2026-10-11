@@ -177,7 +177,7 @@ describe('startHttp — options handed to mcp-core', () => {
     expect(opts.delegatedOAuth.upstream.scopes).toContain('https://www.googleapis.com/auth/forms.body')
     expect(opts.delegatedOAuth.upstream.tokenEndpointAuthMethod).toBe('client_secret_post')
     expect(opts.delegatedOAuth.flow).toBe('redirect')
-    expect(opts.serverName).toBe('better-workspace-mcp')
+    expect(opts.serverName).toBe('workspace')
   })
 
   it('binds the port and host from the environment', async () => {
@@ -373,7 +373,7 @@ describe('startHttp — server identity', () => {
     // riêng ở đây, đổi lấy việc pin được đúng chỗ đã hardcode '0.0.0'.
     const serverInfo = (factory() as unknown as { _serverInfo: { name: string; version: string } })._serverInfo
 
-    expect(serverInfo.name).toBe('better-workspace-mcp')
+    expect(serverInfo.name).toBe('workspace')
     expect(serverInfo.version).toBe(getPackageVersion())
   })
 })

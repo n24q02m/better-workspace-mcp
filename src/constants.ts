@@ -1,8 +1,12 @@
-export const SERVER_NAME = 'better-workspace-mcp'
+export const SERVER_NAME = 'workspace'
 
-// PerPluginStore's LocalFsBackend auto-appends `-mcp` to the plugin name it's given
-// (base = ~/.${plugin}-mcp). Passing SERVER_NAME (already ending in `-mcp`) would double
-// it to ~/.better-workspace-mcp-mcp/. Use this short name for PerPluginStore instead.
+// Credential namespace for PerPluginStore. Deliberately NOT renamed with SERVER_NAME:
+// mcp-core hard-codes the on-disk base as ~/.${plugin}-mcp (credPath, LocalFsBackend,
+// and the machine key at ~/.${plugin}-mcp/.secret), so 'better-workspace' still
+// resolves to ~/.better-workspace-mcp. The same string is also the scrypt salt
+// prefix (`${plugin}:${sub}`) of every HTTP multi-user blob and the KV key prefix,
+// so changing it would orphan existing credentials, not move them. The target
+// data dir ~/.workspace needs a base-dir option in the storage core first.
 export const STORE_PLUGIN = 'better-workspace'
 
 export const GOOGLE_AUTHORIZE_URL = 'https://accounts.google.com/o/oauth2/v2/auth'

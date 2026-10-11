@@ -55,7 +55,7 @@ export function getTransportMode(env: NodeJS.ProcessEnv = process.env, argv: str
  */
 export async function startServer(mode: string): Promise<void> {
   if (process.env.BETTER_WORKSPACE_MCP_BOOTSTRAPPED) {
-    console.error('[better-workspace-mcp] Startup aborted: server already running in this process tree.')
+    console.error(`[${SERVER_NAME}] Startup aborted: server already running in this process tree.`)
     return
   }
   process.env.BETTER_WORKSPACE_MCP_BOOTSTRAPPED = 'true'

@@ -1,4 +1,4 @@
-# better-workspace-mcp tools
+# workspace tools
 
 One composite tool per Google Workspace service, plus two infra tools.
 

@@ -1,5 +1,5 @@
 {
-  "name": "@n24q02m/better-workspace-mcp",
+  "name": "@n24q02m/workspace",
   "mcpName": "io.github.n24q02m/better-workspace-mcp",
   "version": "0.5.0",
   "license": "Apache-2.0",
@@ -21,6 +21,7 @@
     "prepublishOnly": "bun run build"
   },
   "bin": {
+    "workspace": "bin/cli.mjs",
     "better-workspace-mcp": "bin/cli.mjs"
   },
   "engines": {
@@ -61,7 +62,7 @@
   "main": "build/src/init-server.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/n24q02m/better-workspace-mcp.git"
+    "url": "https://github.com/n24q02m/workspace.git"
   },
   "author": "n24q02m"
 }

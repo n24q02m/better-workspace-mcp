@@ -13,7 +13,7 @@ describe('credential-state', () => {
   beforeEach(() => {
     process.env.GOOGLE_OAUTH_CLIENT_ID = 'cid'
     process.env.GOOGLE_OAUTH_CLIENT_SECRET = 'sec'
-    testHomeDir = mkdtempSync(join(tmpdir(), 'better-workspace-mcp-test-'))
+    testHomeDir = mkdtempSync(join(tmpdir(), 'workspace-test-'))
     setHomeDirForTesting(testHomeDir)
   })
 

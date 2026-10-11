@@ -1,4 +1,6 @@
-# better-workspace-mcp
+# workspace
+
+Ten repo/npm/image: `n24q02m/workspace` / `@n24q02m/workspace` / `n24q02m/workspace` (truoc day la `better-workspace-mcp`). CON GIU ten cu co chu dich: registry id `io.github.n24q02m/better-workspace-mcp`, bin alias `better-workspace-mcp`, data dir `~/.better-workspace-mcp` (mcp-core derive tu `STORE_PLUGIN`, doi can option base-dir o core), skret path `/better-workspace-mcp/prod`, va path `.private/superpower/better-workspace-mcp/...`.
 
 TypeScript MCP Server cho Google Workspace (Docs/Drive/Calendar/Gmail/Sheets/Slides/Tasks/Chat/People/Forms + multi-account). Kien truc: vendored-services (Apache-2.0 code tu gemini-cli-extensions/workspace duoi `src/vendored/services/`, gan byte-identical upstream — 2 file da fork co chu dich, xem `NOTICE`) + service CUA MINH duoi `src/services/` (upstream khong co) + mcp-core auth adapter (`@n24q02m/mcp-core`, OAuth + credential storage + relay). N+2 tools: 1 composite tool per service (docs, drive, calendar, chat, gmail, slides, sheets, tasks, people, time, forms) + `config` + `help`.
 

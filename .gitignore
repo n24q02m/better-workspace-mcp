@@ -1,5 +1,5 @@
 # Binaries
-/better-workspace-mcp
+/workspace
 *.exe
 *.dll
 *.so
@@ -65,4 +65,3 @@ wrangler.deploy.jsonc
 superpower/
 superpowers/
 docs/superpowers/
-

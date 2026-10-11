@@ -1,5 +1,5 @@
 # =============================================================================
-# CI Template: Public TypeScript MCP Server (better-workspace-mcp, better-email-mcp, etc.)
+# CI Template: Public TypeScript MCP Server (workspace, better-email-mcp, etc.)
 # Source: https://github.com/n24q02m/.github/templates/ci/public-typescript.yml
 #
 # Runner strategy: ubuntu-latest for ALL jobs, harden-runner everywhere.

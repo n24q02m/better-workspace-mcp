@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@n24q02m/better-workspace-mcp",
+      "name": "@n24q02m/workspace",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.30.0",
         "@n24q02m/mcp-core": "1.24.3",

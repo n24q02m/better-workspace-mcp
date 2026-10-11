@@ -1,4 +1,4 @@
-# Contributing to better-workspace-mcp
+# Contributing to workspace
 
 ## Development Setup
 
